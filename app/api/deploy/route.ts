@@ -42,9 +42,18 @@ export async function POST(
     }
 
     const headerToken = request.headers.get("x-vercel-token")?.trim();
-    const envToken = process.env.VERCEL_TOKEN?.trim();
+    const envToken = (
+      process.env.VOAM_VERCEL_TOKEN ||
+      process.env.MAINZ_VERCEL_TOKEN ||
+      process.env.VERCEL_TOKEN ||
+      ""
+    ).trim();
     const activeToken = headerToken || envToken || "";
-    const teamId = process.env.VERCEL_TEAM_ID?.trim();
+    const teamId = (
+      process.env.VOAM_VERCEL_TEAM_ID ||
+      process.env.VERCEL_TEAM_ID ||
+      ""
+    ).trim();
 
     // Jika Token Vercel tersedia, panggil langsung Vercel REST API v13 produksi
     if (activeToken.length > 0) {
