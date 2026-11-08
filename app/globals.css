@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background-color: #040509;
+  color: #f8fafc;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #040509;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1c243b;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00f0ff;
+}
+
+@layer components {
+  .voam-glass {
+    @apply bg-voam-surface/75 backdrop-blur-2xl border border-voam-border/80;
+  }
+
+  .voam-glass-interactive {
+    @apply bg-voam-surface/75 backdrop-blur-2xl border border-voam-border/80 hover:border-voam-neon/45 transition-all duration-300;
+  }
+
+  .voam-input {
+    @apply w-full px-4 py-3 rounded-2xl bg-voam-bg/90 border border-voam-border text-sm text-voam-text placeholder-voam-muted/50 focus:outline-none focus:border-voam-neon/70 focus:shadow-neon-cyan transition-all duration-200;
+  }
+
+  .voam-btn-primary {
+    @apply relative inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-semibold text-sm text-voam-bg bg-gradient-to-r from-voam-neon via-voam-cyan to-voam-neon bg-[length:200%_100%] hover:bg-right shadow-neon-cyan hover:shadow-neon-cyan-lg active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all duration-300;
+  }
+
+  .voam-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-xs text-voam-text bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 hover:border-voam-neon/40 active:scale-[0.98] transition-all duration-200;
+  }
+}
