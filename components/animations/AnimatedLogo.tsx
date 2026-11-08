@@ -20,18 +20,17 @@ interface ScatterVector {
 const LOGO_TEXT = "MainZ Voam";
 const CHARACTERS = LOGO_TEXT.split("");
 
-// Vektor sebaran deterministik agar saat mouse hover semua huruf buyar lalu spring-back dengan mulus
 const SCATTER_VECTORS: ScatterVector[] = [
-  { x: -28, y: -22, rotate: -34, scale: 1.25 },
-  { x: -16, y: 24, rotate: 28, scale: 0.85 },
-  { x: -8, y: -28, rotate: -22, scale: 1.18 },
-  { x: 12, y: 26, rotate: 38, scale: 0.9 },
-  { x: 24, y: -20, rotate: 42, scale: 1.3 },
-  { x: 0, y: 0, rotate: 0, scale: 1 }, // Spasi
-  { x: -22, y: 22, rotate: -38, scale: 1.25 },
-  { x: 14, y: -26, rotate: 29, scale: 0.88 },
-  { x: -12, y: 25, rotate: -26, scale: 1.15 },
-  { x: 30, y: -18, rotate: 36, scale: 1.22 },
+  { x: -22, y: -16, rotate: -26, scale: 1.15 },
+  { x: -12, y: 18, rotate: 22, scale: 0.9 },
+  { x: -6, y: -20, rotate: -18, scale: 1.12 },
+  { x: 10, y: 18, rotate: 28, scale: 0.92 },
+  { x: 18, y: -15, rotate: 32, scale: 1.18 },
+  { x: 0, y: 0, rotate: 0, scale: 1 },
+  { x: -16, y: 16, rotate: -28, scale: 1.15 },
+  { x: 12, y: -18, rotate: 24, scale: 0.92 },
+  { x: -9, y: 18, rotate: -20, scale: 1.1 },
+  { x: 22, y: -14, rotate: 28, scale: 1.14 },
 ];
 
 export default function AnimatedLogo({
@@ -45,7 +44,6 @@ export default function AnimatedLogo({
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const scatterTimerRef = useRef<number | null>(null);
 
-  // Saat statik (tidak di-hover), huruf acak melompat (translateY), menunduk (scaleY), atau panik (rotate)
   useEffect(() => {
     if (isHovered || isScattered) return;
 
@@ -68,13 +66,12 @@ export default function AnimatedLogo({
         setCharGestures((prev) =>
           prev.map((g, i) => (i === randomIdx ? "none" : g))
         );
-      }, 720);
-    }, 1500);
+      }, 680);
+    }, 2200);
 
     return () => window.clearInterval(interval);
   }, [isHovered, isScattered]);
 
-  // Saat mouse hover: semua huruf buyar seketika lalu kembali tersusun rapi secara spring-back
   const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
     setCharGestures(CHARACTERS.map(() => "none"));
@@ -86,7 +83,7 @@ export default function AnimatedLogo({
 
     scatterTimerRef.current = window.setTimeout(() => {
       setIsScattered(false);
-    }, 230);
+    }, 210);
   }, []);
 
   const handleMouseLeave = useCallback(() => {
@@ -98,22 +95,22 @@ export default function AnimatedLogo({
   }, []);
 
   const sizeClasses = {
-    sm: "text-lg md:text-xl tracking-tight",
-    md: "text-2xl md:text-3xl tracking-tight",
-    lg: "text-3xl md:text-5xl tracking-tight",
+    sm: "text-base sm:text-lg tracking-[-0.03em]",
+    md: "text-xl sm:text-2xl tracking-[-0.035em]",
+    lg: "text-3xl sm:text-5xl tracking-[-0.04em]",
   }[size];
 
   return (
     <div
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`inline-flex items-baseline cursor-pointer select-none font-extrabold ${sizeClasses} ${className}`}
+      className={`inline-flex items-baseline cursor-pointer select-none font-bold ${sizeClasses} ${className}`}
       aria-label={LOGO_TEXT}
     >
       {CHARACTERS.map((char, index) => {
         if (char === " ") {
           return (
-            <span key={`space-${index}`} className="inline-block w-2.5 md:w-3.5">
+            <span key={`space-${index}`} className="inline-block w-2">
               &nbsp;
             </span>
           );
@@ -122,10 +119,10 @@ export default function AnimatedLogo({
         const isVoamPart = index >= 6;
         const gesture = charGestures[index];
         const vector = SCATTER_VECTORS[index] || {
-          x: 15,
-          y: -15,
-          rotate: 20,
-          scale: 1.1,
+          x: 12,
+          y: -12,
+          rotate: 16,
+          scale: 1.08,
         };
 
         let animateTarget: {
@@ -154,31 +151,28 @@ export default function AnimatedLogo({
             scale: vector.scale,
           };
         } else if (gesture === "jump") {
-          // Melompat (translateY)
           animateTarget = {
             x: 0,
-            y: [0, -13, 2, 0],
-            scaleX: [1, 0.92, 1.06, 1],
-            scaleY: [1, 1.18, 0.9, 1],
+            y: [0, -9, 1, 0],
+            scaleX: [1, 0.94, 1.04, 1],
+            scaleY: [1, 1.12, 0.94, 1],
             rotate: 0,
           };
         } else if (gesture === "duck") {
-          // Menunduk (scaleY)
           animateTarget = {
             x: 0,
-            y: [0, 5, 0],
-            scaleX: [1, 1.24, 1],
-            scaleY: [1, 0.48, 1],
+            y: [0, 4, 0],
+            scaleX: [1, 1.18, 1],
+            scaleY: [1, 0.56, 1],
             rotate: 0,
           };
         } else if (gesture === "panic") {
-          // Panik (rotate)
           animateTarget = {
             x: 0,
-            y: [0, -3, 0],
+            y: [0, -2, 0],
             scaleX: 1,
             scaleY: 1,
-            rotate: [0, -18, 18, -14, 14, -7, 7, 0],
+            rotate: [0, -14, 14, -10, 10, -5, 5, 0],
           };
         }
 
@@ -193,19 +187,19 @@ export default function AnimatedLogo({
                 ? {
                     type: "spring",
                     stiffness: 520,
-                    damping: 20,
+                    damping: 22,
                     mass: 0.65,
                   }
                 : {
-                    duration: 0.62,
+                    duration: 0.55,
                     ease: "easeInOut",
                   }
             }
             style={{ transformOrigin: "bottom center" }}
             className={`inline-block ${
               isVoamPart
-                ? "bg-gradient-to-r from-voam-neon via-voam-cyan to-voam-violet bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(0,240,255,0.45)]"
-                : "text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.12)]"
+                ? "bg-gradient-to-b from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent"
+                : "text-white"
             }`}
           >
             {char}

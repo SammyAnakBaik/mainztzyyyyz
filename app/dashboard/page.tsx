@@ -10,7 +10,6 @@ import {
   Code2,
   ExternalLink,
   Trash2,
-  Sparkles,
   KeyRound,
   LogOut,
   FileArchive,
@@ -19,7 +18,10 @@ import {
   Clock,
   Wand2,
   FileWarning,
-  Plus,
+  ArrowUpRight,
+  Database,
+  Cpu,
+  Globe,
 } from "lucide-react";
 import AnimatedLogo from "@/components/animations/AnimatedLogo";
 import { withAuthGuard } from "@/components/auth/withAuthGuard";
@@ -44,6 +46,7 @@ function DashboardContent() {
     vercelToken,
     setVercelToken,
     setIslandStatus,
+    resetIsland,
   } = useVoam();
 
   const [projects, setProjects] = useState<VoamProject[]>([]);
@@ -72,9 +75,6 @@ function DashboardContent() {
     fetchProjects();
   }, [fetchProjects]);
 
-  /**
-   * Pipeline Utama: Deploy VirtualFileSystem ke Vercel API v13 + Simpan ke Firestore `projects`
-   */
   const executeFullDeployPipeline = useCallback(
     async (rawProjectName: string, initialFs: VirtualFileSystem) => {
       if (!user) return;
@@ -111,7 +111,6 @@ function DashboardContent() {
           },
         });
 
-        // Beri waktu transisi visual kapsul `building` sebelum `deployed`
         await new Promise((resolve) => setTimeout(resolve, 650));
 
         const savedProject = await createProjectDocument({
@@ -131,7 +130,7 @@ function DashboardContent() {
 
         setIslandStatus("deployed", `Deployed: ${savedProject.name}`, {
           deploymentUrl: savedProject.deploymentUrl,
-          autoResetMs: 9000,
+          autoResetMs: 8000,
         });
       } catch (err) {
         const msg =
@@ -140,7 +139,7 @@ function DashboardContent() {
             : "Terjadi kegagalan saat mendeploy ke Vercel API v13.";
         setIslandStatus("error", "Deployment Gagal", {
           errorMessage: msg,
-          autoResetMs: 7000,
+          autoResetMs: 6500,
         });
       } finally {
         setIsDeploying(false);
@@ -149,7 +148,6 @@ function DashboardContent() {
     [user, vercelToken, setIslandStatus]
   );
 
-  // Konfigurasi React-Dropzone
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       if (!acceptedFiles || acceptedFiles.length === 0 || isDeploying) return;
@@ -184,24 +182,20 @@ function DashboardContent() {
     disabled: isDeploying,
   });
 
-  // Handler Deploy Template Starter Lengkap (HTML + CSS + JS)
   const handleCreateStarterProject = async () => {
     if (isDeploying) return;
     const title =
-      customProjectName.trim() ||
-      `MainZ Quantum UI ${projects.length + 1}`;
+      customProjectName.trim() || `voam-starter-${projects.length + 1}`;
     const starterFs = createStarterProjectFiles(title);
     await executeFullDeployPipeline(title, starterFs);
   };
 
-  // Handler Uji Coba Auto-Fallback (Bundel Tanpa index.html -> memicu mesin fallback)
   const handleCreateFallbackTestProject = async () => {
     if (isDeploying) return;
     const title =
-      customProjectName.trim() ||
-      `Voam Asset Bundle ${projects.length + 1}`;
+      customProjectName.trim() || `voam-fallback-${projects.length + 1}`;
     const bundleWithoutIndex: VirtualFileSystem = {
-      "/css/neon.css": `/* Stylesheet Tanpa index.html Asli */\nbody {\n  border-top: 3px solid #00f0ff;\n}\n`,
+      "/css/neon.css": `/* Stylesheet Tanpa index.html Asli */\nbody {\n  border-top: 3px solid #38bdf8;\n}\n`,
       "/js/runtime.js": `console.log("Auto-Fallback index.html berhasil memanggil /js/runtime.js!");\n`,
     };
     await executeFullDeployPipeline(title, bundleWithoutIndex);
@@ -210,37 +204,40 @@ function DashboardContent() {
   const handleDeleteProject = async (project: VoamProject) => {
     await deleteProjectDocument(project.id);
     setProjects((prev) => prev.filter((p) => p.id !== project.id));
-    setIslandStatus("idle", `Proyek "${project.name}" dihapus`);
+    resetIsland();
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-16 px-4 sm:px-6 lg:px-10 max-w-7xl mx-auto">
-      {/* Header Navigasi Dashboard */}
-      <header className="voam-glass rounded-3xl px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4 shadow-island">
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-[#050507] text-zinc-100 flex flex-col">
+      {/* Top Sticky Navbar Bergaya Vercel / Linear */}
+      <header className="sticky top-0 z-30 h-14 border-b border-white/[0.07] bg-[#050507]/85 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
           <AnimatedLogo size="sm" />
-          <div className="hidden sm:block h-6 w-px bg-voam-border" />
-          <div className="hidden sm:block">
-            <p className="text-xs font-semibold text-white">
-              {user?.displayName}
-            </p>
-            <p className="text-[11px] font-mono text-voam-muted">
+          <span className="text-zinc-700 select-none">/</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-medium text-zinc-200 truncate">
+              {user?.displayName || "developer"}
+            </span>
+            <span className="hidden md:inline-block text-[10px] font-mono text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08]">
               {user?.email}
-            </p>
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setShowTokenModal((prev) => !prev)}
             className="voam-btn-secondary"
           >
-            <KeyRound className="w-3.5 h-3.5 text-voam-neon" />
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                vercelToken ? "bg-emerald-400" : "bg-zinc-500"
+              }`}
+            />
+            <KeyRound className="w-3.5 h-3.5 text-zinc-400" />
             <span>
-              {vercelToken
-                ? "Token Vercel Aktif"
-                : "Set Token Vercel API"}
+              {vercelToken ? "Token Vercel Aktif" : "Token Vercel API"}
             </span>
           </button>
 
@@ -250,340 +247,367 @@ function DashboardContent() {
               await logoutUser();
               router.replace("/");
             }}
-            className="voam-btn-secondary hover:border-voam-crimson/50 hover:text-voam-crimson"
+            className="voam-btn-secondary hover:border-rose-500/40 hover:text-rose-300"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Keluar</span>
+            <span className="hidden sm:inline">Keluar</span>
           </button>
         </div>
       </header>
 
-      {/* Panel Konfigurasi Token Vercel REST API v13 */}
-      <AnimatePresence initial={false}>
-        {showTokenModal && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="overflow-hidden mb-8"
-          >
-            <div className="voam-glass rounded-3xl p-6 border-voam-neon/40 shadow-neon-cyan space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <KeyRound className="w-4 h-4 text-voam-neon" />
-                    Konfigurasi Bearer Token Vercel REST API v13
-                  </h3>
-                  <p className="text-xs text-voam-muted mt-1">
-                    Masukkan Personal Access Token Vercel Anda untuk mendeploy ke
-                    akun Vercel produksi secara langsung, atau kosongkan jika
-                    menggunakan variabel server <code className="text-voam-neon">VERCEL_TOKEN</code> di <code className="text-voam-neon">.env.local</code>.
-                  </p>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
+        {/* Drawer Konfigurasi Token Vercel */}
+        <AnimatePresence initial={false}>
+          {showTokenModal && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div className="voam-glass rounded-2xl p-5 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-zinc-300" />
+                      Konfigurasi Bearer Token Vercel REST API v13
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Opsional jika Anda sudah mengatur variabel{" "}
+                      <code className="text-zinc-200 font-mono">
+                        VOAM_VERCEL_TOKEN
+                      </code>{" "}
+                      di dashboard Environment Variables Vercel.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <input
+                    type="password"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    placeholder="Tempelkan Personal Access Token Vercel..."
+                    className="voam-input font-mono flex-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVercelToken(tokenInput);
+                      setShowTokenModal(false);
+                      setIslandStatus(
+                        "deployed",
+                        tokenInput.trim()
+                          ? "Token Vercel Tersimpan"
+                          : "Menggunakan Token Server",
+                        { autoResetMs: 2500 }
+                      );
+                    }}
+                    className="voam-btn-primary shrink-0"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Simpan Token</span>
+                  </button>
                 </div>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  placeholder="Masukkan Vercel Token (contoh: vcp_...)"
-                  className="voam-input font-mono flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVercelToken(tokenInput);
-                    setShowTokenModal(false);
-                    setIslandStatus(
-                      "deployed",
-                      tokenInput.trim()
-                        ? "Token Vercel Tersimpan"
-                        : "Mode Server / Simulator Aktif",
-                      { autoResetMs: 3000 }
-                    );
-                  }}
-                  className="voam-btn-primary shrink-0"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Simpan Konfigurasi</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Seksi Atas: Dropzone & Generator Proyek */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-10">
-        {/* Dropzone Klien (JSZip & Multi-File) */}
-        <div className="lg:col-span-8">
-          <div className="voam-glass rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-voam-neon">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Vercel v13 Payload Engine
-                </span>
-                <h1 className="text-2xl font-bold text-white mt-1">
-                  Deploy Bundel Web atau Arsip ZIP
-                </h1>
-              </div>
-
-              <div className="w-full sm:w-64">
-                <input
-                  type="text"
-                  value={customProjectName}
-                  onChange={(e) => setCustomProjectName(e.target.value)}
-                  placeholder="Nama Proyek (Opsional)"
-                  className="voam-input py-2 text-xs font-mono"
-                />
-              </div>
-            </div>
-
-            {/* Area Drag & Drop */}
-            <div
-              {...getRootProps()}
-              className={`relative rounded-3xl border-2 border-dashed p-8 sm:p-10 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center min-h-[230px] ${
-                isDragActive
-                  ? "border-voam-neon bg-voam-neon/10 shadow-neon-cyan scale-[1.01]"
-                  : "border-voam-border hover:border-voam-neon/50 bg-voam-bg/60 hover:bg-voam-bg/90"
-              } ${isDeploying ? "opacity-60 pointer-events-none" : ""}`}
-            >
-              <input {...getInputProps()} />
-
-              <motion.div
-                animate={{
-                  y: isDragActive ? -6 : [0, -4, 0],
-                }}
-                transition={{
-                  duration: 2.4,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-voam-neon/20 to-voam-violet/20 border border-voam-neon/40 flex items-center justify-center mb-4 shadow-neon-cyan"
-              >
-                {isDragActive ? (
-                  <FileArchive className="w-8 h-8 text-voam-neon" />
-                ) : (
-                  <UploadCloud className="w-8 h-8 text-voam-neon" />
-                )}
-              </motion.div>
-
-              <p className="text-base font-bold text-white">
-                {isDragActive
-                  ? "Lepaskan Berkas untuk Mengekstrak & Mendeploy ke Vercel..."
-                  : "Tarik & Lepaskan File .ZIP atau Kumpulan Berkas Web (.html, .css, .js)"}
-              </p>
-              <p className="text-xs text-voam-muted mt-2 max-w-md">
-                Ekstraksi dilakukan 100% di memori klien via{" "}
-                <span className="text-voam-neon font-mono">JSZip</span>. Jika tidak
-                ditemukan <span className="text-voam-neon font-mono">index.html</span>,
-                mesin fallback otomatis merakit halaman pemanggil aset sebelum
-                dikirim ke Vercel API v13.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Kolom Kanan: Quick Launchpad & Uji Fallback */}
-        <div className="lg:col-span-4">
-          <div className="voam-glass rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between space-y-5">
-            <div className="space-y-2">
-              <span className="text-[11px] font-mono uppercase tracking-widest text-voam-violet">
-                Instant Cloud Launchpad
-              </span>
-              <h2 className="text-xl font-bold text-white">
-                Belum Menyiapkan File ZIP?
-              </h2>
-              <p className="text-xs text-voam-muted leading-relaxed">
-                Buat proyek multi-file secara instan untuk langsung menguji{" "}
-                <strong className="text-white">In-Browser File Manager</strong>,{" "}
-                <strong className="text-white">Monaco Editor</strong>, dan fitur{" "}
-                <strong className="text-white">Re-deploy Vercel v13</strong>.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                disabled={isDeploying}
-                onClick={handleCreateStarterProject}
-                className="voam-btn-primary w-full justify-between px-5 py-3.5"
-              >
-                <span className="flex items-center gap-2.5">
-                  <Wand2 className="w-4 h-4" />
-                  <span>Buat &amp; Deploy Starter App</span>
-                </span>
-                <Plus className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                disabled={isDeploying}
-                onClick={handleCreateFallbackTestProject}
-                className="voam-btn-secondary w-full justify-between px-4 py-3 text-left"
-              >
-                <span className="flex items-center gap-2.5">
-                  <FileWarning className="w-4 h-4 text-voam-amber shrink-0" />
-                  <span>
-                    Uji Bundel Tanpa <code className="text-voam-neon">index.html</code> (Auto-Fallback)
-                  </span>
-                </span>
-              </button>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-voam-bg/80 border border-voam-border text-[11px] text-voam-muted space-y-1 font-mono">
-              <div className="flex items-center justify-between">
-                <span>Koleksi Firestore:</span>
-                <span className="text-voam-neon">projects/{`{id}`}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Payload Target:</span>
-                <span className="text-voam-emerald">Vercel API v13</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Seksi Bawah: Daftar Proyek Tersimpan di Firestore */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        {/* Baris Header & Ringkasan Telemetri */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/[0.06] pb-6">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2.5">
-              <FolderGit2 className="w-5 h-5 text-voam-neon" />
-              <span>Workspace Proyek Anda</span>
-              <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-voam-neon/10 text-voam-neon border border-voam-neon/30">
-                {projects.length}
-              </span>
-            </h2>
-            <p className="text-xs text-voam-muted mt-0.5">
-              Klik &ldquo;Buka di Monaco IDE&rdquo; untuk mengedit kode, menambah file baru, dan melakukan Re-deploy.
+            <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
+              Deployment &amp; Cloud IDE Studio
+            </h1>
+            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+              Unggah bundel proyek statis untuk di-deploy ke Vercel v13 atau
+              buka proyek di dalam Monaco Editor.
             </p>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <div className="px-3 py-1.5 rounded-lg bg-[#0B0B0F] border border-white/[0.07] flex items-center gap-2 text-zinc-300">
+              <Globe className="w-3.5 h-3.5 text-zinc-400" />
+              <span>{projects.length} Proyek</span>
+            </div>
+            <div className="px-3 py-1.5 rounded-lg bg-[#0B0B0F] border border-white/[0.07] flex items-center gap-2 text-zinc-300">
+              <Cpu className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Vercel API v13</span>
+            </div>
+            <div className="px-3 py-1.5 rounded-lg bg-[#0B0B0F] border border-white/[0.07] flex items-center gap-2 text-zinc-300">
+              <Database className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Firestore Live</span>
+            </div>
+          </div>
         </div>
 
-        {loadingProjects ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[1, 2, 3].map((n) => (
-              <div
-                key={n}
-                className="voam-glass rounded-3xl p-6 h-52 animate-pulse flex flex-col justify-between"
-              >
-                <div className="h-5 w-1/2 bg-white/10 rounded-lg" />
-                <div className="h-16 w-full bg-white/5 rounded-2xl" />
-                <div className="h-9 w-full bg-white/10 rounded-xl" />
+        {/* Seksi Utama: Dropzone & Launchpad (12 Kolom Presisi) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* Kolom Kiri (8 cols): Dropzone Klien */}
+          <div className="lg:col-span-8 flex flex-col">
+            <div className="voam-glass rounded-2xl overflow-hidden flex-1 flex flex-col">
+              <div className="px-5 py-3.5 border-b border-white/[0.06] bg-white/[0.01] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <UploadCloud className="w-4 h-4 text-zinc-300" />
+                  <span className="text-xs font-semibold text-zinc-100">
+                    Deploy Bundel Web atau Arsip .ZIP
+                  </span>
+                </div>
+
+                <div className="w-full sm:w-60">
+                  <input
+                    type="text"
+                    value={customProjectName}
+                    onChange={(e) => setCustomProjectName(e.target.value)}
+                    placeholder="Nama proyek (opsional)..."
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#050507] border border-white/[0.08] focus:border-white/[0.25] focus:outline-none text-xs font-mono text-zinc-100 placeholder-zinc-500"
+                  />
+                </div>
               </div>
-            ))}
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="voam-glass rounded-3xl p-12 text-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-voam-neon/10 border border-voam-neon/30 flex items-center justify-center mx-auto text-voam-neon">
-              <Code2 className="w-7 h-7" />
-            </div>
-            <div className="max-w-md mx-auto">
-              <h3 className="text-base font-bold text-white">
-                Belum Ada Proyek yang Di-deploy
-              </h3>
-              <p className="text-xs text-voam-muted mt-1 leading-relaxed">
-                Unggah file ZIP pada Dropzone di atas atau tekan tombol{" "}
-                <strong className="text-voam-neon">Buat &amp; Deploy Starter App</strong>{" "}
-                untuk memulai proyek pertama Anda.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {projects.map((proj, index) => (
-              <motion.div
-                key={proj.id}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 380,
-                  damping: 28,
-                  delay: index * 0.04,
-                }}
-                className="voam-glass-interactive rounded-3xl p-6 flex flex-col justify-between gap-5 group"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="text-base font-bold text-white truncate group-hover:text-voam-neon transition-colors">
-                        {proj.name}
-                      </h3>
-                      <p className="text-[11px] font-mono text-voam-muted truncate">
-                        ID: {proj.deploymentId}
-                      </p>
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-voam-emerald/15 text-voam-emerald border border-voam-emerald/40 shrink-0">
-                      {proj.status}
-                    </span>
-                  </div>
 
-                  {/* URL Deployment Live */}
-                  <a
-                    href={proj.deploymentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl bg-voam-bg/80 border border-voam-border hover:border-voam-neon/50 text-xs font-mono text-voam-neon transition-colors"
-                  >
-                    <span className="truncate">{proj.deploymentUrl}</span>
-                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                  </a>
+              <div className="p-5 flex-1 flex flex-col">
+                <div
+                  {...getRootProps()}
+                  className={`relative flex-1 rounded-xl border border-dashed p-8 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center min-h-[210px] ${
+                    isDragActive
+                      ? "border-white/40 bg-white/[0.04]"
+                      : "border-white/[0.12] hover:border-white/[0.24] bg-[#060609]/90 hover:bg-[#08080C]"
+                  } ${isDeploying ? "opacity-50 pointer-events-none" : ""}`}
+                >
+                  <input {...getInputProps()} />
 
-                  {/* Metadata FileSystem */}
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-voam-muted">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/5">
-                      <Layers className="w-3 h-3 text-voam-neon" />
-                      {Object.keys(proj.fileSystem || {}).length || proj.fileCount}{" "}
-                      file
-                    </span>
-
-                    {proj.hasAutoFallbackIndex && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-voam-amber/15 text-voam-amber border border-voam-amber/30">
-                        Auto index.html
-                      </span>
+                  <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.09] flex items-center justify-center mb-3.5 text-zinc-200">
+                    {isDragActive ? (
+                      <FileArchive className="w-5 h-5" />
+                    ) : (
+                      <UploadCloud className="w-5 h-5" />
                     )}
+                  </div>
 
-                    <span className="inline-flex items-center gap-1 ml-auto text-[10px]">
-                      <Clock className="w-3 h-3" />
-                      {new Date(proj.updatedAt).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                  <p className="text-sm font-medium text-zinc-100">
+                    {isDragActive
+                      ? "Lepaskan berkas untuk mengekstrak & mendeploy..."
+                      : "Tarik & lepaskan arsip .ZIP atau pilih berkas web (.html, .css, .js)"}
+                  </p>
+                  <p className="text-xs text-zinc-400 mt-1.5 max-w-md leading-relaxed">
+                    Diekstrak langsung di memori klien menggunakan{" "}
+                    <code className="text-zinc-200 font-mono">JSZip</code>.
+                    Apabila berkas{" "}
+                    <code className="text-zinc-200 font-mono">index.html</code>{" "}
+                    tidak ditemukan, sistem otomatis menyintesis halaman induk
+                    pemanggil aset.
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 mt-4">
+                    {[".zip", ".html", ".css", ".js", ".ts", ".json", ".svg"].map(
+                      (ext) => (
+                        <span
+                          key={ext}
+                          className="px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-zinc-400"
+                        >
+                          {ext}
+                        </span>
+                      )
+                    )}
                   </div>
                 </div>
-
-                {/* Tombol Aksi Buka di IDE & Hapus */}
-                <div className="flex items-center gap-2 pt-2 border-t border-voam-border/60">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/project/${proj.id}`)}
-                    className="voam-btn-primary flex-1 py-2.5 text-xs"
-                  >
-                    <Code2 className="w-4 h-4" />
-                    <span>Buka di Monaco IDE</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteProject(proj)}
-                    title="Hapus Proyek"
-                    className="p-2.5 rounded-2xl bg-white/[0.04] hover:bg-voam-crimson/20 text-voam-muted hover:text-voam-crimson border border-white/10 hover:border-voam-crimson/40 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+              </div>
+            </div>
           </div>
-        )}
-      </section>
+
+          {/* Kolom Kanan (4 cols): Template Instan & Uji Auto-Fallback */}
+          <div className="lg:col-span-4 flex flex-col">
+            <div className="voam-glass rounded-2xl overflow-hidden flex-1 flex flex-col justify-between">
+              <div>
+                <div className="px-5 py-3.5 border-b border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-100">
+                    Quick Launchpad
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    Instant Template
+                  </span>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Belum menyiapkan arsip <code className="text-zinc-200 font-mono">.zip</code>?
+                    Bangkitkan proyek multi-file di bawah ini untuk langsung
+                    menguji <strong className="text-zinc-200">Monaco Editor</strong>{" "}
+                    dan <strong className="text-zinc-200">Re-deploy Vercel v13</strong>.
+                  </p>
+
+                  <div className="space-y-2.5 pt-1">
+                    <button
+                      type="button"
+                      disabled={isDeploying}
+                      onClick={handleCreateStarterProject}
+                      className="voam-btn-primary w-full justify-between px-4 py-2.5"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Wand2 className="w-4 h-4" />
+                        <span>Deploy Starter Web App</span>
+                      </span>
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isDeploying}
+                      onClick={handleCreateFallbackTestProject}
+                      className="voam-btn-secondary w-full justify-between px-3.5 py-2.5 text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileWarning className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Uji Bundel Tanpa index.html</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        Fallback
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 border-t border-white/[0.06] bg-[#07070A] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                <span>Firestore: projects/{`{id}`}</span>
+                <span className="text-emerald-400">● Ready</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Seksi Bawah: Daftar Proyek Workspace */}
+        <section className="space-y-4 pt-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <FolderGit2 className="w-4 h-4 text-zinc-300" />
+              <h2 className="text-sm font-semibold text-white">
+                Daftar Proyek Workspace
+              </h2>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.07] text-zinc-300">
+                {projects.length}
+              </span>
+            </div>
+          </div>
+
+          {loadingProjects ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((n) => (
+                <div
+                  key={n}
+                  className="voam-glass rounded-2xl p-5 h-44 animate-pulse flex flex-col justify-between"
+                >
+                  <div className="h-4 w-1/2 bg-white/[0.06] rounded" />
+                  <div className="h-10 w-full bg-white/[0.04] rounded-xl" />
+                  <div className="h-9 w-full bg-white/[0.06] rounded-xl" />
+                </div>
+              ))}
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="voam-glass rounded-2xl p-10 text-center space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto text-zinc-300">
+                <Code2 className="w-5 h-5" />
+              </div>
+              <div className="max-w-md mx-auto">
+                <h3 className="text-sm font-semibold text-zinc-100">
+                  Belum Ada Proyek di Workspace
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Jatuhkan berkas <code className="text-zinc-200 font-mono">.zip</code> pada
+                  kotak di atas atau klik tombol{" "}
+                  <strong className="text-zinc-200">
+                    Deploy Starter Web App
+                  </strong>{" "}
+                  untuk membuat proyek pertama Anda.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {projects.map((proj) => (
+                <div
+                  key={proj.id}
+                  className="voam-glass-interactive rounded-2xl p-5 flex flex-col justify-between gap-4"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-white truncate">
+                          {proj.name}
+                        </h3>
+                        <p className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">
+                          {proj.deploymentId}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Ready
+                      </span>
+                    </div>
+
+                    <a
+                      href={proj.deploymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#060609] border border-white/[0.07] hover:border-white/[0.2] text-xs font-mono text-zinc-300 hover:text-white transition-colors"
+                    >
+                      <span className="truncate">
+                        {proj.deploymentUrl.replace(/^https?:\/\//, "")}
+                      </span>
+                      <ExternalLink className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    </a>
+
+                    <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06]">
+                        <Layers className="w-3 h-3 text-zinc-400" />
+                        {Object.keys(proj.fileSystem || {}).length ||
+                          proj.fileCount}{" "}
+                        file
+                      </span>
+
+                      {proj.hasAutoFallbackIndex && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          Auto index.html
+                        </span>
+                      )}
+
+                      <span className="inline-flex items-center gap-1 ml-auto text-[10px] text-zinc-500">
+                        <Clock className="w-3 h-3" />
+                        {new Date(proj.updatedAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-3 border-t border-white/[0.06]">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/project/${proj.id}`)}
+                      className="voam-btn-primary flex-1 py-2 text-xs"
+                    >
+                      <Code2 className="w-3.5 h-3.5" />
+                      <span>Buka di Monaco IDE</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProject(proj)}
+                      title="Hapus Proyek"
+                      className="p-2 rounded-xl bg-white/[0.03] hover:bg-rose-500/15 text-zinc-400 hover:text-rose-400 border border-white/[0.07] hover:border-rose-500/30 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   );
 }

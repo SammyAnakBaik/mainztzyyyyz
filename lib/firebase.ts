@@ -57,6 +57,10 @@ const app: FirebaseApp =
 const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 
+export function isCloudSessionActive(): boolean {
+  return isLiveFirebaseConfigured() && Boolean(auth.currentUser);
+}
+
 export { app, auth, db };
 
 // ============================================================================
@@ -173,7 +177,7 @@ export async function upsertUserProfile(
 
   saveUserToLocalMirror(userPayload);
 
-  if (isLiveFirebaseConfigured()) {
+  if (isCloudSessionActive()) {
     try {
       const userRef = doc(db, "users", uid);
       const existingSnap = await getDoc(userRef);
@@ -245,7 +249,7 @@ export async function createProjectDocument(params: {
     .toString(36)
     .slice(2, 8)}`;
 
-  if (isLiveFirebaseConfigured()) {
+  if (isCloudSessionActive()) {
     try {
       const newDocRef = doc(collection(db, "projects"));
       projectId = newDocRef.id;
@@ -272,7 +276,7 @@ export async function listUserProjects(uid: string): Promise<VoamProject[]> {
   const localMap = getLocalProjectsMap();
   const localProjects = Object.values(localMap).filter((p) => p.uid === uid);
 
-  if (isLiveFirebaseConfigured()) {
+  if (isCloudSessionActive()) {
     try {
       const projectsQuery = query(
         collection(db, "projects"),
@@ -325,7 +329,7 @@ export async function listUserProjects(uid: string): Promise<VoamProject[]> {
 export async function getProjectById(
   projectId: string
 ): Promise<VoamProject | null> {
-  if (isLiveFirebaseConfigured()) {
+  if (isCloudSessionActive()) {
     try {
       const docRef = doc(db, "projects", projectId);
       const snap = await getDoc(docRef);
@@ -407,7 +411,7 @@ export async function syncProjectFileSystemAndDeploy(
     updatedAt: nowIso,
   };
 
-  if (isLiveFirebaseConfigured()) {
+  if (isCloudSessionActive()) {
     try {
       const docRef = doc(db, "projects", projectId);
       await setDoc(docRef, updatedFirestoreDoc);

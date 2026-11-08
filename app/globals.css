@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 :root {
   color-scheme: dark;
@@ -16,12 +16,13 @@
 
 html,
 body {
-  background-color: #040509;
-  color: #f8fafc;
+  background-color: #050507;
+  color: #fafafa;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  letter-spacing: -0.011em;
 }
 
 /* Custom Sleek Scrollbar */
@@ -31,36 +32,36 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #040509;
+  background: #050507;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1c243b;
+  background: #1f1f28;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
+  background: #3f3f4e;
 }
 
 @layer components {
   .voam-glass {
-    @apply bg-voam-surface/75 backdrop-blur-2xl border border-voam-border/80;
+    @apply bg-[#0B0B0F]/95 backdrop-blur-2xl border border-white/[0.08] shadow-glass-lg;
   }
 
   .voam-glass-interactive {
-    @apply bg-voam-surface/75 backdrop-blur-2xl border border-voam-border/80 hover:border-voam-neon/45 transition-all duration-300;
+    @apply bg-[#0B0B0F]/95 backdrop-blur-2xl border border-white/[0.08] hover:border-white/[0.18] hover:bg-[#101017] shadow-glass-sm transition-all duration-200;
   }
 
   .voam-input {
-    @apply w-full px-4 py-3 rounded-2xl bg-voam-bg/90 border border-voam-border text-sm text-voam-text placeholder-voam-muted/50 focus:outline-none focus:border-voam-neon/70 focus:shadow-neon-cyan transition-all duration-200;
+    @apply w-full px-3.5 py-2.5 rounded-xl bg-[#0E0E14] border border-white/[0.11] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/[0.32] focus:bg-[#12121A] focus:ring-2 focus:ring-white/[0.06] transition-all duration-150;
   }
 
   .voam-btn-primary {
-    @apply relative inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-semibold text-sm text-voam-bg bg-gradient-to-r from-voam-neon via-voam-cyan to-voam-neon bg-[length:200%_100%] hover:bg-right shadow-neon-cyan hover:shadow-neon-cyan-lg active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all duration-300;
+    @apply relative inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-zinc-950 bg-white hover:bg-zinc-200 shadow-[0_1px_2px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.12)] active:scale-[0.98] disabled:opacity-45 disabled:pointer-events-none transition-all duration-150;
   }
 
   .voam-btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-xs text-voam-text bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 hover:border-voam-neon/40 active:scale-[0.98] transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-medium text-xs text-zinc-200 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] hover:border-white/[0.18] shadow-[0_1px_0_0_rgba(255,255,255,0.05)_inset] active:scale-[0.98] transition-all duration-150;
   }
 }

@@ -31,10 +31,10 @@ interface FileTreeProps {
   onDeleteFile: (filePath: string) => void;
 }
 
-/**
- * Mengubah map flat VirtualFileSystem menjadi struktur pohon direktori rekursif
- */
-function buildHierarchicalTree(fs: VirtualFileSystem, filterQuery: string): FileTreeNode[] {
+function buildHierarchicalTree(
+  fs: VirtualFileSystem,
+  filterQuery: string
+): FileTreeNode[] {
   const rootNodes: FileTreeNode[] = [];
   const paths = Object.keys(fs)
     .map(normalizeFilePath)
@@ -56,7 +56,8 @@ function buildHierarchicalTree(fs: VirtualFileSystem, filterQuery: string): File
 
       if (isLast) {
         const extParts = segment.toLowerCase().split(".");
-        const extension = extParts.length > 1 ? extParts[extParts.length - 1] : "";
+        const extension =
+          extParts.length > 1 ? extParts[extParts.length - 1] : "";
         currentLevel.push({
           name: segment,
           path: accumulatedPath,
@@ -101,21 +102,21 @@ function getFileIcon(extension?: string) {
   switch (extension) {
     case "html":
     case "htm":
-      return <FileCode2 className="w-4 h-4 text-orange-400 shrink-0" />;
+      return <FileCode2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />;
     case "css":
-      return <Palette className="w-4 h-4 text-voam-neon shrink-0" />;
+      return <Palette className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
     case "js":
     case "mjs":
     case "cjs":
     case "jsx":
-      return <Braces className="w-4 h-4 text-amber-300 shrink-0" />;
+      return <Braces className="w-3.5 h-3.5 text-amber-300 shrink-0" />;
     case "ts":
     case "tsx":
-      return <Braces className="w-4 h-4 text-sky-400 shrink-0" />;
+      return <Braces className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
     case "json":
-      return <FileJson className="w-4 h-4 text-voam-emerald shrink-0" />;
+      return <FileJson className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
     default:
-      return <FileText className="w-4 h-4 text-voam-muted shrink-0" />;
+      return <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />;
   }
 }
 
@@ -127,14 +128,17 @@ export default function FileTree({
   onCreateFile,
   onDeleteFile,
 }: FileTreeProps) {
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
+  const [expandedFolders, setExpandedFolders] = useState<
+    Record<string, boolean>
+  >({
     "/css": true,
     "/js": true,
     "/assets": true,
     "/src": true,
   });
   const [isAddingFile, setIsAddingFile] = useState<boolean>(false);
-  const [newFilePathInput, setNewFilePathInput] = useState<string>("/js/script.js");
+  const [newFilePathInput, setNewFilePathInput] =
+    useState<string>("/js/script.js");
   const [formError, setFormError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -162,7 +166,9 @@ export default function FileTree({
 
     const normalized = normalizeFilePath(raw);
     if (normalized.endsWith("/")) {
-      setFormError("Masukkan nama berkas beserta ekstensinya (misal /js/app.js).");
+      setFormError(
+        "Masukkan nama berkas beserta ekstensinya (misal /js/app.js)."
+      );
       return;
     }
 
@@ -171,7 +177,6 @@ export default function FileTree({
       return;
     }
 
-    // Pastikan semua folder induk otomatis terbuka di pohon direktori
     const segments = normalized.replace(/^\/+/, "").split("/");
     if (segments.length > 1) {
       let acc = "";
@@ -209,17 +214,17 @@ export default function FileTree({
             type="button"
             onClick={() => toggleFolder(node.path)}
             style={{ paddingLeft: `${depth * 14 + 10}px` }}
-            className="w-full flex items-center gap-2 py-1.5 pr-3 rounded-xl text-xs font-medium text-voam-muted hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="w-full flex items-center gap-2 py-1.5 pr-3 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] transition-colors"
           >
             {isExpanded ? (
-              <ChevronDown className="w-3.5 h-3.5 text-voam-muted shrink-0" />
+              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
             ) : (
-              <ChevronRight className="w-3.5 h-3.5 text-voam-muted shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
             )}
             {isExpanded ? (
-              <FolderOpen className="w-4 h-4 text-voam-neon/90 shrink-0" />
+              <FolderOpen className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
             ) : (
-              <Folder className="w-4 h-4 text-voam-neon/60 shrink-0" />
+              <Folder className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
             )}
             <span className="truncate">{node.name}</span>
           </button>
@@ -230,7 +235,7 @@ export default function FileTree({
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
                 className="overflow-hidden"
               >
                 {node.children.map((child) => renderTreeNode(child, depth + 1))}
@@ -248,10 +253,10 @@ export default function FileTree({
       <div
         key={node.path}
         style={{ paddingLeft: `${depth * 14 + 10}px` }}
-        className={`group relative flex items-center justify-between py-1.5 pr-2 rounded-xl text-xs transition-all cursor-pointer ${
+        className={`group relative flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs transition-all cursor-pointer ${
           isSelected
-            ? "bg-voam-neon/15 text-white font-semibold border border-voam-neon/35 shadow-[0_0_15px_rgba(0,240,255,0.12)]"
-            : "text-voam-muted hover:text-white hover:bg-white/[0.04] border border-transparent"
+            ? "bg-white/[0.08] text-white font-medium border border-white/[0.1]"
+            : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.03] border border-transparent"
         }`}
         onClick={() => onSelectFile(node.path)}
       >
@@ -264,7 +269,7 @@ export default function FileTree({
           {isDirty && (
             <span
               title="Perubahan belum di-deploy"
-              className="w-2 h-2 rounded-full bg-voam-neon shadow-[0_0_8px_#00F0FF]"
+              className="w-1.5 h-1.5 rounded-full bg-amber-400"
             />
           )}
           {Object.keys(fileSystem).length > 1 && (
@@ -275,7 +280,7 @@ export default function FileTree({
                 onDeleteFile(node.path);
               }}
               title={`Hapus ${node.path}`}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-voam-crimson/20 text-voam-muted hover:text-voam-crimson transition-all"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/15 text-zinc-400 hover:text-rose-400 transition-all"
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -286,19 +291,13 @@ export default function FileTree({
   };
 
   return (
-    <aside className="w-full md:w-72 lg:w-80 shrink-0 bg-voam-surface/90 backdrop-blur-2xl border-r border-voam-border flex flex-col h-full select-none">
-      {/* Header Explorer */}
-      <div className="p-4 border-b border-voam-border flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-voam-text flex items-center gap-2">
-            <span>File Manager</span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-voam-neon/10 text-voam-neon border border-voam-neon/25">
-              {Object.keys(fileSystem).length} file
-            </span>
-          </h2>
-          <p className="text-[11px] text-voam-muted mt-0.5">
-            Virtual FileSystem Explorer
-          </p>
+    <aside className="w-full md:w-64 lg:w-72 shrink-0 bg-[#08080C] border-r border-white/[0.07] flex flex-col h-full select-none">
+      <div className="p-3.5 border-b border-white/[0.06] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-zinc-200">Explorer</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/[0.07]">
+            {Object.keys(fileSystem).length}
+          </span>
         </div>
 
         <button
@@ -310,33 +309,32 @@ export default function FileTree({
               setNewFilePathInput("/js/script.js");
             }
           }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-voam-neon/15 hover:bg-voam-neon/25 text-voam-neon border border-voam-neon/35 transition-all shadow-neon-cyan"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] transition-colors"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-3 h-3" />
           <span>Add New File</span>
         </button>
       </div>
 
-      {/* Form Input Add New File */}
       <AnimatePresence initial={false}>
         {isAddingFile && (
           <motion.form
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
             onSubmit={handleAddFileSubmit}
-            className="overflow-hidden border-b border-voam-border bg-voam-elevated/80 px-4 py-3 space-y-2.5"
+            className="overflow-hidden border-b border-white/[0.06] bg-[#0B0B10] px-3.5 py-3 space-y-2.5"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-voam-neon flex items-center gap-1.5">
-                <FilePlus2 className="w-3.5 h-3.5" />
-                Buat Path File Baru
+              <span className="text-[11px] font-medium text-zinc-200 flex items-center gap-1.5">
+                <FilePlus2 className="w-3.5 h-3.5 text-zinc-400" />
+                Path Berkas Baru
               </span>
               <button
                 type="button"
                 onClick={() => setIsAddingFile(false)}
-                className="text-voam-muted hover:text-white"
+                className="text-zinc-500 hover:text-white"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -349,35 +347,37 @@ export default function FileTree({
                 onChange={(e) => setNewFilePathInput(e.target.value)}
                 placeholder="/js/script.js"
                 autoFocus
-                className="w-full px-3 py-1.5 rounded-xl bg-voam-bg border border-voam-border focus:border-voam-neon/60 focus:outline-none text-xs font-mono text-white placeholder-voam-muted/50"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[#050507] border border-white/[0.09] focus:border-white/[0.25] focus:outline-none text-xs font-mono text-white placeholder-zinc-500"
               />
               <button
                 type="submit"
-                className="p-2 rounded-xl bg-voam-neon text-voam-bg hover:bg-voam-neon/90 transition-colors shrink-0"
+                className="p-1.5 rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors shrink-0"
                 title="Simpan File Baru"
               >
                 <Check className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             </div>
 
-            {/* Preset Cepat */}
             <div className="flex flex-wrap gap-1">
-              {["/js/script.js", "/css/theme.css", "/about.html", "/config.json"].map(
-                (preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setNewFilePathInput(preset)}
-                    className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 text-voam-muted hover:text-voam-neon border border-white/5 transition-colors"
-                  >
-                    {preset}
-                  </button>
-                )
-              )}
+              {[
+                "/js/script.js",
+                "/css/theme.css",
+                "/about.html",
+                "/config.json",
+              ].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setNewFilePathInput(preset)}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 border border-white/[0.06] transition-colors"
+                >
+                  {preset}
+                </button>
+              ))}
             </div>
 
             {formError && (
-              <p className="text-[11px] text-voam-crimson font-medium">
+              <p className="text-[11px] text-rose-400 font-medium">
                 {formError}
               </p>
             )}
@@ -385,26 +385,24 @@ export default function FileTree({
         )}
       </AnimatePresence>
 
-      {/* Kotak Pencarian Cepat */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="px-3 pt-2.5 pb-1.5">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-voam-muted absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter berkas..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-voam-bg/70 border border-voam-border/70 focus:border-voam-neon/50 focus:outline-none text-xs text-white placeholder-voam-muted/60 font-mono"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#050507] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-xs text-zinc-200 placeholder-zinc-500 font-mono"
           />
         </div>
       </div>
 
-      {/* Daftar Pohon Direktori */}
-      <div className="flex-1 overflow-y-auto px-2.5 py-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-2 py-1.5 space-y-0.5">
         {treeNodes.length === 0 ? (
           <div className="text-center py-8 px-4">
-            <p className="text-xs text-voam-muted">
-              Tidak ada berkas yang cocok dengan pencarian.
+            <p className="text-xs text-zinc-500">
+              Tidak ada berkas yang cocok.
             </p>
           </div>
         ) : (

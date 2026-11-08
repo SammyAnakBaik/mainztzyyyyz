@@ -6,11 +6,6 @@ import { motion } from "framer-motion";
 import { ShieldAlert, Loader2 } from "lucide-react";
 import { useVoam } from "@/context/VoamContext";
 
-/**
- * Higher-Order Component (HOC) Pelindung Rute — MainZ Voam
- * Mengunci halaman Dashboard dan In-Browser IDE agar hanya dapat diakses oleh
- * pengguna yang telah terautentikasi di Firebase Auth / sesi aktif.
- */
 export function withAuthGuard<P extends object>(
   WrappedComponent: React.ComponentType<P>
 ): React.FC<P> {
@@ -26,24 +21,17 @@ export function withAuthGuard<P extends object>(
 
     if (loadingAuth) {
       return (
-        <div className="min-h-screen bg-voam-bg flex flex-col items-center justify-center p-6 select-none">
+        <div className="min-h-screen bg-[#050507] flex flex-col items-center justify-center p-6 select-none">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", stiffness: 320, damping: 24 }}
-            className="flex flex-col items-center gap-4 px-8 py-6 rounded-3xl bg-voam-surface/80 backdrop-blur-2xl border border-voam-border shadow-neon-cyan"
+            transition={{ duration: 0.18 }}
+            className="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-[#0B0B0F] border border-white/[0.08] shadow-glass-sm"
           >
-            <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-voam-neon/10 border border-voam-neon/30">
-              <Loader2 className="w-6 h-6 text-voam-neon animate-spin" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-voam-text tracking-wide">
-                Memverifikasi Sesi Keamanan MainZ Voam...
-              </p>
-              <p className="text-xs text-voam-muted mt-1 font-mono">
-                Firebase Auth &amp; Firestore Security Handshake
-              </p>
-            </div>
+            <Loader2 className="w-4 h-4 text-zinc-300 animate-spin" />
+            <span className="text-xs font-medium text-zinc-300">
+              Memverifikasi sesi MainZ Voam...
+            </span>
           </motion.div>
         </div>
       );
@@ -51,15 +39,15 @@ export function withAuthGuard<P extends object>(
 
     if (!user) {
       return (
-        <div className="min-h-screen bg-voam-bg flex flex-col items-center justify-center p-6 select-none">
+        <div className="min-h-screen bg-[#050507] flex flex-col items-center justify-center p-6 select-none">
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-voam-surface/90 border border-voam-crimson/40 text-voam-crimson shadow-neon-crimson"
+            className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-[#0B0B0F] border border-rose-500/30 text-rose-400"
           >
-            <ShieldAlert className="w-5 h-5 shrink-0" />
-            <span className="text-xs font-mono uppercase tracking-wider">
-              Akses Terkunci — Mengalihkan ke Gerbang Autentikasi...
+            <ShieldAlert className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-mono">
+              Sesi terkunci — Mengalihkan ke halaman masuk...
             </span>
           </motion.div>
         </div>

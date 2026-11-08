@@ -12,36 +12,42 @@ const config: Config = {
     extend: {
       colors: {
         voam: {
-          bg: "#040509",
-          surface: "#0A0D16",
-          elevated: "#101524",
-          border: "#1C243B",
-          neon: "#00F0FF",
-          cyan: "#06B6D4",
-          violet: "#8B5CF6",
-          fuchsia: "#EC4899",
-          emerald: "#10B981",
-          amber: "#F59E0B",
-          crimson: "#F43F5E",
-          text: "#F8FAFC",
-          muted: "#8E9BAE",
+          bg: "#050507",
+          surface: "#0B0B0F",
+          elevated: "#121218",
+          border: "#1F1F28",
+          neon: "#38BDF8",
+          cyan: "#22D3EE",
+          violet: "#818CF8",
+          fuchsia: "#F472B6",
+          emerald: "#34D399",
+          amber: "#FBBF24",
+          crimson: "#FB7185",
+          text: "#FAFAFA",
+          muted: "#8E8E99",
         },
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
+        sans: [
+          "Inter",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "system-ui",
+          "sans-serif",
+        ],
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
       },
       boxShadow: {
-        "neon-cyan": "0 0 25px rgba(0, 240, 255, 0.28), 0 0 60px rgba(0, 240, 255, 0.08)",
-        "neon-cyan-lg": "0 0 35px rgba(0, 240, 255, 0.45), 0 0 90px rgba(0, 240, 255, 0.16)",
-        "neon-violet": "0 0 25px rgba(139, 92, 246, 0.32), 0 0 60px rgba(139, 92, 246, 0.1)",
-        "neon-emerald": "0 0 25px rgba(16, 185, 129, 0.32), 0 0 60px rgba(16, 185, 129, 0.1)",
-        "neon-crimson": "0 0 25px rgba(244, 63, 94, 0.35), 0 0 60px rgba(244, 63, 94, 0.12)",
-        "island": "0 20px 50px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.09), 0 0 30px rgba(0, 240, 255, 0.15)",
+        "glass-sm":
+          "0 1px 0 0 rgba(255, 255, 255, 0.07) inset, 0 8px 24px -4px rgba(0, 0, 0, 0.6)",
+        "glass-lg":
+          "0 1px 0 0 rgba(255, 255, 255, 0.09) inset, 0 24px 64px -12px rgba(0, 0, 0, 0.85)",
+        island:
+          "0 24px 60px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.12) inset",
       },
       backgroundImage: {
         "voam-mesh":
-          "radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.09) 0%, transparent 45%), radial-gradient(circle at 85% 20%, rgba(139, 92, 246, 0.09) 0%, transparent 45%), radial-gradient(circle at 50% 90%, rgba(6, 182, 212, 0.06) 0%, transparent 50%)",
+          "radial-gradient(ellipse 80% 45% at 50% -15%, rgba(255, 255, 255, 0.055), rgba(56, 189, 248, 0.025) 45%, transparent 80%)",
       },
     },
   },

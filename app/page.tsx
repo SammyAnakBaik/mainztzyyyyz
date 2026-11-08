@@ -9,9 +9,9 @@ import {
   User as UserIcon,
   ArrowRight,
   Sparkles,
-  Layers,
   Terminal,
   ShieldCheck,
+  Layers,
   Loader2,
 } from "lucide-react";
 import AnimatedLogo from "@/components/animations/AnimatedLogo";
@@ -55,7 +55,7 @@ export default function AuthGatewayPage() {
         await loginWithEmail(email, password);
         setIslandStatus("deployed", "Sesi Developer Aktif", {
           subtitle: "Mengalihkan ke Ruang Kerja MainZ Voam",
-          autoResetMs: 3500,
+          autoResetMs: 2800,
         });
       } else {
         setIslandStatus("uploading", "Mendaftarkan Akun Baru...", {
@@ -65,7 +65,7 @@ export default function AuthGatewayPage() {
         await registerWithEmail(email, password, displayName);
         setIslandStatus("deployed", "Akun Berhasil Dibuat", {
           subtitle: "Profil tersimpan di koleksi users",
-          autoResetMs: 3500,
+          autoResetMs: 2800,
         });
       }
       router.push("/dashboard");
@@ -77,7 +77,7 @@ export default function AuthGatewayPage() {
       setErrorMsg(msg);
       setIslandStatus("error", "Autentikasi Gagal", {
         errorMessage: msg,
-        autoResetMs: 5000,
+        autoResetMs: 4500,
       });
     } finally {
       setSubmitting(false);
@@ -99,8 +99,8 @@ export default function AuthGatewayPage() {
         progress: 80,
       });
       await loginWithEmail(demoEmail, demoPass);
-      setIslandStatus("deployed", "Selamat Datang, Architect!", {
-        autoResetMs: 3500,
+      setIslandStatus("deployed", "Selamat Datang, Architect", {
+        autoResetMs: 2500,
       });
       router.push("/dashboard");
     } catch {
@@ -118,241 +118,273 @@ export default function AuthGatewayPage() {
   };
 
   return (
-    <main className="min-h-screen pt-20 pb-12 px-4 sm:px-6 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Ambient Orbs Latar Belakang */}
-      <div className="pointer-events-none absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-voam-neon/10 blur-[130px]" />
-      <div className="pointer-events-none absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-voam-violet/15 blur-[130px]" />
-
-      {/* Grid Halus */}
+    <div className="min-h-screen flex flex-col bg-[#050507] text-zinc-100 relative overflow-hidden">
+      {/* Subtle Architectural Top Light & Micro-Grid */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        className="pointer-events-none absolute inset-0 opacity-[0.025]"
         style={{
           backgroundImage:
-            "linear-gradient(to right, #00F0FF 1px, transparent 1px), linear-gradient(to bottom, #00F0FF 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
+            "linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
         }}
       />
 
-      <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-        {/* Kolom Kiri: Branding & Value Proposition */}
-        <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-voam-neon/10 border border-voam-neon/30 text-voam-neon text-xs font-mono">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>NEXT.JS 14 • VERCEL API v13 • MONACO CLOUD IDE</span>
-          </div>
-
-          <div>
-            <AnimatedLogo size="lg" />
-            <p className="mt-4 text-base sm:text-lg text-voam-muted leading-relaxed max-w-xl mx-auto lg:mx-0">
-              Platform SaaS Deployment &amp; In-Browser IDE berkecepatan tinggi.
-              Unggah bundel web mentah atau arsip <code className="text-voam-neon font-mono">.zip</code>,
-              deploy instan ke jaringan global Vercel v13, dan modifikasi kode
-              secara langsung melalui Monaco Editor terintegrasi.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-            <div className="voam-glass rounded-2xl p-4 text-left">
-              <Layers className="w-5 h-5 text-voam-neon mb-2" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Auto-Fallback HTML
-              </h3>
-              <p className="text-xs text-voam-muted mt-1">
-                Sintesis otomatis <code className="text-voam-neon">/index.html</code> di memori jika bundel tidak memiliki halaman utama.
-              </p>
-            </div>
-
-            <div className="voam-glass rounded-2xl p-4 text-left">
-              <Terminal className="w-5 h-5 text-voam-violet mb-2" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                In-Browser VS Code
-              </h3>
-              <p className="text-xs text-voam-muted mt-1">
-                Monaco Editor <code className="text-voam-violet">vs-dark</code> dengan deteksi bahasa dinamis &amp; pohon direktori interaktif.
-              </p>
-            </div>
-
-            <div className="voam-glass rounded-2xl p-4 text-left">
-              <ShieldCheck className="w-5 h-5 text-voam-emerald mb-2" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Firestore Sync
-              </h3>
-              <p className="text-xs text-voam-muted mt-1">
-                Struktur <code className="text-voam-emerald">fileSystem</code> tersimpan aman di Firestore untuk Re-deploy satu klik.
-              </p>
-            </div>
-          </div>
+      {/* Minimal Top Bar */}
+      <header className="relative z-10 h-14 border-b border-white/[0.06] bg-[#050507]/80 backdrop-blur-xl px-6 flex items-center justify-between max-w-7xl w-full mx-auto">
+        <div className="flex items-center gap-3">
+          <AnimatedLogo size="sm" />
+          <span className="text-[11px] font-mono text-zinc-400 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.07]">
+            v13.4
+          </span>
         </div>
 
-        {/* Kolom Kanan: Kartu Login / Register Glassmorphism dengan AnimatePresence */}
-        <div className="lg:col-span-5">
-          <div className="voam-glass rounded-3xl p-6 sm:p-8 shadow-island relative overflow-hidden">
-            {/* Switcher Tab Login / Register */}
-            <div className="grid grid-cols-2 p-1 rounded-2xl bg-voam-bg/90 border border-voam-border mb-6">
-              {(["login", "register"] as const).map((mode) => {
-                const active = authMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => {
-                      setAuthMode(mode);
-                      setErrorMsg("");
-                    }}
-                    className={`relative py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors z-10 ${
-                      active ? "text-voam-bg" : "text-voam-muted hover:text-white"
-                    }`}
-                  >
-                    {active && (
-                      <motion.div
-                        layoutId="auth-mode-pill"
-                        transition={{
-                          type: "spring",
-                          stiffness: 450,
-                          damping: 30,
-                        }}
-                        className="absolute inset-0 rounded-xl bg-gradient-to-r from-voam-neon to-voam-cyan shadow-neon-cyan -z-10"
-                      />
-                    )}
-                    {mode === "login" ? "Masuk Sesi" : "Daftar Akun"}
-                  </button>
-                );
-              })}
+        <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
+          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+          <span className="hidden sm:inline">
+            {isLiveFirebaseConfigured()
+              ? "Firestore Cloud • asia-southeast1"
+              : "Hybrid Cloud Engine"}
+          </span>
+        </div>
+      </header>
+
+      {/* Main Content Split */}
+      <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-12">
+        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+          {/* Kolom Kiri: Value Proposition & Architectural Specs */}
+          <div className="lg:col-span-7 space-y-7">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.08] text-zinc-300 text-xs font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+              <span>Cloud Deployment &amp; In-Browser Monaco IDE</span>
             </div>
 
-            <AnimatePresence mode="wait">
-              <motion.form
-                key={authMode}
-                initial={{ opacity: 0, x: authMode === "login" ? -18 : 18 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: authMode === "login" ? 18 : -18 }}
-                transition={{ type: "spring", stiffness: 420, damping: 30 }}
-                onSubmit={handleSubmit}
-                className="space-y-4"
-              >
+            <div className="space-y-3">
+              <AnimatedLogo size="lg" />
+              <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-xl">
+                Platform deployment terpadu dan lingkungan pengembangan berbasis
+                web. Ekstrak arsip <code className="text-zinc-200 font-mono">.zip</code> di
+                memori klien, publikasikan ke jaringan global Vercel REST API
+                v13, dan kelola kode produksi secara langsung melalui Monaco
+                Editor.
+              </p>
+            </div>
+
+            {/* Daftar Spesifikasi Arsitektur Bergaya Linear */}
+            <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+              <div className="py-4 flex items-start gap-4">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                  <Layers className="w-4 h-4 text-zinc-200" />
+                </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">
-                    {authMode === "login"
-                      ? "Selamat Datang Kembali"
-                      : "Buat Identitas Developer"}
-                  </h2>
-                  <p className="text-xs text-voam-muted mt-1">
-                    {authMode === "login"
-                      ? "Masuk untuk mengelola deployment Vercel & proyek IDE Anda."
-                      : "Data profil akan disimpan ke koleksi users di Firestore."}
+                  <h3 className="text-xs font-semibold text-zinc-100 tracking-wide">
+                    Auto-Fallback HTML Synthesis
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Mendeteksi keberadaan <code className="text-zinc-200 font-mono">/index.html</code> dan
+                    merakit berkas induk pemanggil aset secara otomatis di memori
+                    sebelum pengiriman payload.
                   </p>
                 </div>
+              </div>
 
-                {authMode === "register" && (
+              <div className="py-4 flex items-start gap-4">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                  <Terminal className="w-4 h-4 text-zinc-200" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-zinc-100 tracking-wide">
+                    In-Browser Monaco Studio (vs-dark)
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Navigasi pohon berkas interaktif, pembuatan file baru instan,
+                    pratinjau langsung (<span className="text-zinc-200">split live preview</span>),
+                    dan deteksi bahasa otomatis.
+                  </p>
+                </div>
+              </div>
+
+              <div className="py-4 flex items-start gap-4">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldCheck className="w-4 h-4 text-zinc-200" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-zinc-100 tracking-wide">
+                    Cloud Firestore FileSystem Sync
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Seluruh pohon kode tersimpan aman pada koleksi{" "}
+                    <code className="text-zinc-200 font-mono">projects</code> di
+                    Firestore untuk mendukung proses Re-deploy berulang.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Kolom Kanan: Kartu Autentikasi Presisi */}
+          <div className="lg:col-span-5">
+            <div className="voam-glass rounded-2xl p-6 sm:p-7 relative border-white/[0.1]">
+              {/* Segmented Control */}
+              <div className="grid grid-cols-2 p-1 rounded-xl bg-[#050507] border border-white/[0.08] mb-6">
+                {(["login", "register"] as const).map((mode) => {
+                  const active = authMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setAuthMode(mode);
+                        setErrorMsg("");
+                      }}
+                      className={`relative py-2 text-xs font-semibold rounded-lg transition-colors z-10 ${
+                        active
+                          ? "text-white"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {active && (
+                        <motion.div
+                          layoutId="auth-mode-pill"
+                          transition={{
+                            type: "spring",
+                            stiffness: 480,
+                            damping: 34,
+                          }}
+                          className="absolute inset-0 rounded-lg bg-[#181822] border border-white/[0.12] shadow-sm -z-10"
+                        />
+                      )}
+                      {mode === "login" ? "Masuk Sesi" : "Daftar Akun"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.form
+                  key={authMode}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.14, ease: "easeOut" }}
+                  onSubmit={handleSubmit}
+                  className="space-y-4"
+                >
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                      {authMode === "login"
+                        ? "Masuk ke Workspace"
+                        : "Buat Akun Developer"}
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      {authMode === "login"
+                        ? "Gunakan akun Anda untuk mengakses dashboard & IDE."
+                        : "Profil Anda akan disinkronkan ke koleksi users Firestore."}
+                    </p>
+                  </div>
+
+                  {authMode === "register" && (
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-medium text-zinc-300">
+                        Nama Tampilan
+                      </label>
+                      <div className="relative">
+                        <UserIcon className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          placeholder="MainZ Architect"
+                          className="voam-input pl-10"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
-                    <label className="block text-[11px] font-mono uppercase tracking-wider text-voam-muted">
-                      Nama Tampilan Developer
+                    <label className="block text-xs font-medium text-zinc-300">
+                      Alamat Email
                     </label>
                     <div className="relative">
-                      <UserIcon className="w-4 h-4 text-voam-muted absolute left-4 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
-                        type="text"
+                        type="email"
                         required
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder="Contoh: MainZ Architect"
-                        className="voam-input pl-11"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="nama@domain.com"
+                        className="voam-input pl-10 font-mono text-xs sm:text-sm"
                       />
                     </div>
                   </div>
-                )}
 
-                <div className="space-y-1.5">
-                  <label className="block text-[11px] font-mono uppercase tracking-wider text-voam-muted">
-                    Alamat Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-voam-muted absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="developer@mainzvoam.dev"
-                      className="voam-input pl-11 font-mono"
-                    />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-zinc-300">
+                      Kata Sandi
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Minimal 6 karakter"
+                        className="voam-input pl-10 font-mono text-xs sm:text-sm"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-1.5">
-                  <label className="block text-[11px] font-mono uppercase tracking-wider text-voam-muted">
-                    Kata Sandi
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-voam-muted absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimal 6 karakter"
-                      className="voam-input pl-11 font-mono"
-                    />
-                  </div>
-                </div>
-
-                {errorMsg && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-3 rounded-xl bg-voam-crimson/15 border border-voam-crimson/40 text-xs text-voam-crimson font-medium"
-                  >
-                    {errorMsg}
-                  </motion.div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="voam-btn-primary w-full mt-2"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Memproses Sesi...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        {authMode === "login"
-                          ? "Masuk ke Dashboard"
-                          : "Daftarkan & Buka Dashboard"}
-                      </span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
+                  {errorMsg && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300"
+                    >
+                      {errorMsg}
+                    </motion.div>
                   )}
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="voam-btn-primary w-full py-2.5 mt-1"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Memproses...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {authMode === "login"
+                            ? "Masuk ke Dashboard"
+                            : "Buat Akun & Lanjutkan"}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </motion.form>
+              </AnimatePresence>
+
+              <div className="mt-5 pt-5 border-t border-white/[0.06] space-y-3">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleQuickDemoAccess}
+                  className="voam-btn-secondary w-full justify-center py-2.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-zinc-300" />
+                  <span>Akses Cepat (Sesi Architect)</span>
                 </button>
-              </motion.form>
-            </AnimatePresence>
-
-            {/* Akses Instan 1-Klik untuk Pengujian Cepat */}
-            <div className="mt-6 pt-5 border-t border-voam-border/80 flex flex-col gap-2.5">
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={handleQuickDemoAccess}
-                className="voam-btn-secondary w-full justify-center py-2.5"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-voam-neon" />
-                <span>Masuk Instan (Akun Architect)</span>
-              </button>
-
-              <div className="flex items-center justify-between text-[11px] font-mono text-voam-muted px-1">
-                <span>Engine: Firebase Auth + Firestore</span>
-                <span className="text-voam-emerald">
-                  ● {isLiveFirebaseConfigured() ? "Cloud Live" : "Autonomous Hybrid"}
-                </span>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
