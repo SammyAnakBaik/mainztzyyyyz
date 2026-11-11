@@ -291,6 +291,37 @@ function DashboardContent() {
       )}
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
+        {/* Banner Eksklusif Otoritas Supreme Owner */}
+        {isOwner && (
+          <div className="voam-glass rounded-2xl p-4 sm:px-6 border-amber-500/30 bg-amber-500/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
+                  <span>Sesi Otoritas Supreme Owner Aktif</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    GOD MODE
+                  </span>
+                </h2>
+                <p className="text-xs text-zinc-300 mt-0.5">
+                  Anda memiliki kendali penuh atas seluruh pengguna, kuota
+                  database, inspeksi proyek global, dan perisai WAF Anti-SQLi.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push("/owner")}
+              className="voam-btn-primary shrink-0"
+            >
+              <Shield className="w-4 h-4" />
+              <span>Buka Owner Command Center</span>
+            </button>
+          </div>
+        )}
+
         {/* Drawer Konfigurasi Token Vercel */}
         <AnimatePresence initial={false}>
           {showTokenModal && (

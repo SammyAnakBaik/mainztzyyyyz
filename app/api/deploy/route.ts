@@ -84,7 +84,8 @@ export async function POST(
     const nameWaf = inspectInputWithWaf(
       body.name,
       "Nama Proyek API Deploy",
-      DEFAULT_SYSTEM_CONFIG
+      "api-deploy@server",
+      { config: DEFAULT_SYSTEM_CONFIG }
     );
     if (!nameWaf.safe) {
       return NextResponse.json(

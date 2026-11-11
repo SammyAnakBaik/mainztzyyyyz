@@ -22,6 +22,7 @@ import {
   fetchSystemConfig,
   updateSystemConfigByOwner,
   listAllUsersForOwner,
+  updateUserByOwner,
 } from "@/lib/firebase";
 import {
   DEFAULT_SYSTEM_CONFIG,
@@ -29,7 +30,6 @@ import {
   OWNER_MASTER_UID,
   assertSafeMetadataInput,
   isOwnerEmail,
-  markRegistrationCompleted,
   recordSecurityEvent,
   verifyRegistrationAntiSpam,
 } from "@/lib/security-shield";
@@ -52,6 +52,12 @@ interface VoamContextValue {
   updateSystemConfig: (
     partial: Partial<VoamSystemConfig>
   ) => Promise<VoamSystemConfig>;
+  provisionUserByOwner: (params: {
+    email: string;
+    password: string;
+    displayName: string;
+    customMaxProjects: number;
+  }) => Promise<VoamUserDocument>;
   island: IslandNotification;
   vercelToken: string;
   setVercelToken: (token: string) => void;
@@ -95,6 +101,25 @@ interface LocalAuthRecord {
   displayName: string;
 }
 
+function getRegisteredAccountsMap(): Record<string, LocalAuthRecord> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_AUTH_ACCOUNTS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, LocalAuthRecord>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveRegisteredAccountsMap(map: Record<string, LocalAuthRecord>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOCAL_AUTH_ACCOUNTS_KEY, JSON.stringify(map));
+  } catch {
+    // Abaikan
+  }
+}
+
 const VoamContext = createContext<VoamContextValue | undefined>(undefined);
 
 export function VoamProvider({ children }: { children: React.ReactNode }) {
@@ -117,10 +142,14 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
 
   const updateSystemConfig = useCallback(
     async (partial: Partial<VoamSystemConfig>): Promise<VoamSystemConfig> => {
-      const updated = await updateSystemConfigByOwner(
-        partial,
-        user?.email || OWNER_DISPLAY_EMAIL
-      );
+      const currentCfg = await fetchSystemConfig();
+      const merged: VoamSystemConfig = {
+        ...currentCfg,
+        ...partial,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.email || OWNER_DISPLAY_EMAIL,
+      };
+      const updated = await updateSystemConfigByOwner(merged);
       setSystemConfig(updated);
       return updated;
     },
@@ -194,7 +223,10 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
               fbUser.email,
               fbUser.displayName || undefined
             );
-            if (profile.status === "suspended" && !isOwnerEmail(profile.email)) {
+            if (
+              profile.status === "suspended" &&
+              !isOwnerEmail(profile.email)
+            ) {
               await firebaseSignOut(auth);
               setUser(null);
               if (typeof window !== "undefined") {
@@ -218,7 +250,10 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
                 );
                 if (cached) {
                   const parsed = JSON.parse(cached) as VoamUserDocument;
-                  if (parsed.status !== "suspended" || isOwnerEmail(parsed.email)) {
+                  if (
+                    parsed.status !== "suspended" ||
+                    isOwnerEmail(parsed.email)
+                  ) {
                     setUser(parsed);
                     setLoadingAuth(false);
                     return;
@@ -260,31 +295,31 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
       const cfg = await fetchSystemConfig();
       setSystemConfig(cfg);
 
-      // WAF Deep Inspection pada input login (menangkal SQLi / NoSQLi / XSS)
-      assertSafeMetadataInput(email, "Email Login", cfg, email);
-      assertSafeMetadataInput(password, "Password Login", cfg, email);
+      // 1. WAF Deep Inspection pada input login (menangkal SQLi / NoSQLi / XSS)
+      assertSafeMetadataInput(email, "Email Login", email);
+      assertSafeMetadataInput(password, "Password Login", email);
 
       const normalizedEmail = email.trim().toLowerCase();
-      if (!normalizedEmail || password.length < 6) {
-        throw new Error(
-          "Masukkan alamat email yang valid dan kata sandi minimal 6 karakter."
-        );
+      if (!normalizedEmail || !normalizedEmail.includes("@")) {
+        throw new Error("Masukkan format alamat email yang valid.");
+      }
+      if (password.length < 6) {
+        throw new Error("Kata sandi wajib minimal 6 karakter.");
       }
 
-      // Jalur Khusus Bootstrapped Supreme Owner (Mainzz@adminmnz.com)
+      // 2. Jalur Khusus Bootstrapped Supreme Owner (Mainzz@adminmnz.com)
       if (isOwnerEmail(normalizedEmail)) {
         if (password !== OWNER_MASTER_PASSWORD) {
           recordSecurityEvent({
-            type: "auth_anomaly",
+            type: "SPAM_REGISTRATION_BLOCKED",
             severity: "critical",
             actorEmail: normalizedEmail,
-            targetField: "Owner Authentication",
-            blockedPayloadSnippet: "Invalid Owner Master Password Attempt",
-            message:
+            targetResource: "auth/owner-login",
+            details:
               "Percobaan login ke akun Supreme Owner Mainzz@adminmnz.com dengan kata sandi yang salah.",
           });
           throw new Error(
-            "Kredensial Supreme Owner ditolak. Kata sandi otoritas tidak sesuai."
+            "Kata sandi untuk akun Supreme Owner (Mainzz@adminmnz.com) salah!"
           );
         }
 
@@ -310,18 +345,19 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
               });
               ownerUid = created.user.uid;
             } catch {
-              // Tetap lanjutkan dengan sesi Supreme Owner Hybrid
+              // Gunakan UID Master Supreme Owner
             }
           }
         }
 
         const ownerProfile = await upsertUserProfile(
           ownerUid,
-          OWNER_DISPLAY_EMAIL.toLowerCase(),
+          OWNER_DISPLAY_EMAIL,
           "MainZ Supreme Owner"
         );
         const elevatedProfile: VoamUserDocument = {
           ...ownerProfile,
+          email: OWNER_DISPLAY_EMAIL,
           role: "owner",
           status: "active",
           customMaxProjects: 9999,
@@ -336,23 +372,41 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
         }
 
         recordSecurityEvent({
-          type: "owner_action",
-          severity: "low",
+          type: "OWNER_CONFIG_UPDATED",
+          severity: "info",
           actorEmail: OWNER_DISPLAY_EMAIL,
-          targetField: "Owner Session",
-          blockedPayloadSnippet: "AUTHENTICATED_OWNER_SUPREME",
-          message: `Sesi Supreme Owner (${OWNER_DISPLAY_EMAIL}) berhasil diaktifkan.`,
+          targetResource: "auth/owner-session",
+          details: `Sesi Supreme Owner (${OWNER_DISPLAY_EMAIL}) berhasil diaktifkan.`,
         });
         return;
       }
 
-      // Blokir login user biasa jika Maintenance Mode aktif
-      if (cfg.maintenanceMode) {
+      // 3. Tolak email salah ketik domain @adminmnz.com (misal mainnnzz@adminmnz.com)
+      const localAccounts = getRegisteredAccountsMap();
+      if (
+        normalizedEmail.endsWith("@adminmnz.com") &&
+        !localAccounts[normalizedEmail]
+      ) {
+        recordSecurityEvent({
+          type: "SPAM_REGISTRATION_BLOCKED",
+          severity: "warning",
+          actorEmail: normalizedEmail,
+          targetResource: "auth/login",
+          details: `Percobaan login menggunakan email domain admin tidak dikenal (${normalizedEmail}).`,
+        });
         throw new Error(
-          "Sistem MainZ Voam sedang dalam Mode Pemeliharaan (Maintenance) oleh Owner. Hanya akun Owner yang dapat masuk."
+          `Akun "${normalizedEmail}" tidak terdaftar! Jika Anda ingin masuk sebagai Owner, gunakan email resmi: Mainzz@adminmnz.com`
         );
       }
 
+      // 4. Blokir login user biasa jika Maintenance Mode aktif
+      if (cfg.maintenanceMode) {
+        throw new Error(
+          "Sistem MainZ Voam sedang dalam Mode Lockdown (Maintenance) oleh Owner. Hanya akun Owner yang dapat masuk."
+        );
+      }
+
+      // 5. Coba autentikasi via Firebase Auth jika provider aktif
       if (isLiveFirebaseConfigured()) {
         try {
           const credential = await signInWithEmailAndPassword(
@@ -368,7 +422,7 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
           if (profile.status === "suspended") {
             await firebaseSignOut(auth);
             throw new Error(
-              "Akun Anda telah ditangguhkan (Suspended) oleh Owner MainZ Voam."
+              "Akun Anda telah dibekukan (Suspended) oleh Owner MainZ Voam."
             );
           }
           setUser(profile);
@@ -382,59 +436,54 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           if (
             err instanceof Error &&
-            err.message.includes("ditangguhkan (Suspended)")
+            err.message.includes("dibekukan (Suspended)")
           ) {
             throw err;
           }
           const code = (err as { code?: string })?.code || "";
-          if (
-            code === "auth/invalid-credential" ||
-            code === "auth/wrong-password"
-          ) {
-            throw new Error("Email atau kata sandi yang Anda masukkan salah.");
+          if (code === "auth/wrong-password") {
+            throw new Error("Kata sandi yang Anda masukkan salah.");
+          }
+          if (code === "auth/user-not-found") {
+            throw new Error(
+              `Akun dengan email "${normalizedEmail}" belum terdaftar! Silakan daftar terlebih dahulu pada tab Daftar Akun.`
+            );
+          }
+          if (code === "auth/invalid-credential") {
+            // Cek apakah ada di registri lokal, jika tidak ada berarti belum terdaftar
+            if (!localAccounts[normalizedEmail]) {
+              throw new Error(
+                `Akun "${normalizedEmail}" belum terdaftar atau kata sandi salah! Silakan daftar terlebih dahulu pada tab Daftar Akun.`
+              );
+            }
           }
         }
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 380));
-      const rawAccounts =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(LOCAL_AUTH_ACCOUNTS_KEY)
-          : null;
-      const accounts: Record<string, LocalAuthRecord> = rawAccounts
-        ? JSON.parse(rawAccounts)
-        : {};
+      // 6. Pengecekan Ketat Registri Akun Terdaftar (TIDAK BOLEH Auto-Create saat Login!)
+      await new Promise((resolve) => setTimeout(resolve, 320));
+      const existingAccount = localAccounts[normalizedEmail];
 
-      const existing = accounts[normalizedEmail];
-      if (existing && existing.passwordHash !== btoa(password)) {
-        throw new Error("Kata sandi yang Anda masukkan tidak sesuai.");
-      }
-
-      const uid =
-        existing?.uid ||
-        `usr_${btoa(normalizedEmail)
-          .replace(/[^a-zA-Z0-9]/g, "")
-          .slice(0, 20)}`;
-      const displayName =
-        existing?.displayName || normalizedEmail.split("@")[0] || "Developer";
-
-      const profile = await upsertUserProfile(uid, normalizedEmail, displayName);
-      if (profile.status === "suspended") {
+      if (!existingAccount) {
         throw new Error(
-          "Akun Anda telah ditangguhkan (Suspended) oleh Owner MainZ Voam."
+          `Akun dengan email "${normalizedEmail}" belum terdaftar! Silakan buat akun terlebih dahulu melalui tab Daftar Akun.`
         );
       }
 
-      if (!existing && typeof window !== "undefined") {
-        accounts[normalizedEmail] = {
-          uid,
-          email: normalizedEmail,
-          passwordHash: btoa(password),
-          displayName,
-        };
-        window.localStorage.setItem(
-          LOCAL_AUTH_ACCOUNTS_KEY,
-          JSON.stringify(accounts)
+      if (existingAccount.passwordHash !== btoa(password)) {
+        throw new Error(
+          "Kata sandi yang Anda masukkan salah. Periksa kembali kata sandi Anda."
+        );
+      }
+
+      const profile = await upsertUserProfile(
+        existingAccount.uid,
+        normalizedEmail,
+        existingAccount.displayName
+      );
+      if (profile.status === "suspended") {
+        throw new Error(
+          "Akun Anda telah dibekukan (Suspended) oleh Owner MainZ Voam."
         );
       }
 
@@ -462,39 +511,49 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
       const normalizedEmail = email.trim().toLowerCase();
       const cleanName = displayName.trim() || normalizedEmail.split("@")[0];
 
-      // Proteksi akun Supreme Owner dari klaim registrasi publik
-      if (isOwnerEmail(normalizedEmail)) {
+      // Proteksi domain @adminmnz.com & akun Supreme Owner dari klaim registrasi publik
+      if (
+        isOwnerEmail(normalizedEmail) ||
+        normalizedEmail.endsWith("@adminmnz.com")
+      ) {
         throw new Error(
-          "Email otoritas Supreme Owner sudah diproteksi sistem. Silakan gunakan tab Masuk Sesi."
+          "Domain @adminmnz.com merupakan domain otoritas khusus Owner dan tidak dapat didaftarkan oleh publik."
         );
       }
 
-      // Hitung jumlah user di DB saat ini untuk proteksi kuota anti-limit
       const existingUsers = await listAllUsersForOwner();
 
       // Verifikasi Anti-Spam, Rate Limit, Disposable Email, & WAF SQLi/NoSQLi/XSS
-      const spamCheck = verifyRegistrationAntiSpam({
+      verifyRegistrationAntiSpam({
         email: normalizedEmail,
         displayName: cleanName,
+        currentTotalUsers: existingUsers.length,
         honeypotValue: honeypot,
-        currentTotalUsersInDb: existingUsers.length,
-        config: cfg,
       });
 
-      if (!spamCheck.allowed) {
-        throw new Error(
-          spamCheck.reason || "Registrasi ditolak oleh sistem proteksi Anti-Spam."
-        );
-      }
-
       // Cek WAF untuk password juga
-      assertSafeMetadataInput(password, "Kata Sandi Registrasi", cfg, normalizedEmail);
+      assertSafeMetadataInput(
+        password,
+        "Kata Sandi Registrasi",
+        normalizedEmail
+      );
 
       if (!normalizedEmail || password.length < 6) {
         throw new Error(
           "Alamat email wajib valid dan kata sandi minimal 6 karakter."
         );
       }
+
+      const accounts = getRegisteredAccountsMap();
+      if (accounts[normalizedEmail]) {
+        throw new Error(
+          "Alamat email ini sudah terdaftar! Silakan masuk melalui tab Masuk Sesi."
+        );
+      }
+
+      let uid = `usr_${btoa(normalizedEmail)
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .slice(0, 20)}`;
 
       if (isLiveFirebaseConfigured()) {
         try {
@@ -503,23 +562,10 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
             normalizedEmail,
             password
           );
+          uid = credential.user.uid;
           if (cleanName) {
             await updateProfile(credential.user, { displayName: cleanName });
           }
-          const profile = await upsertUserProfile(
-            credential.user.uid,
-            normalizedEmail,
-            cleanName
-          );
-          markRegistrationCompleted(normalizedEmail);
-          setUser(profile);
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(
-              SESSION_STORAGE_USER_KEY,
-              JSON.stringify(profile)
-            );
-          }
-          return;
         } catch (err) {
           const code = (err as { code?: string })?.code || "";
           if (code === "auth/email-already-in-use") {
@@ -530,42 +576,16 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Mode Otonom Lokal
-      await new Promise((resolve) => setTimeout(resolve, 420));
-      const rawAccounts =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(LOCAL_AUTH_ACCOUNTS_KEY)
-          : null;
-      const accounts: Record<string, LocalAuthRecord> = rawAccounts
-        ? JSON.parse(rawAccounts)
-        : {};
-
-      if (accounts[normalizedEmail]) {
-        throw new Error(
-          "Alamat email ini sudah terdaftar. Silakan gunakan tab Masuk Sesi."
-        );
-      }
-
-      const uid = `usr_${btoa(normalizedEmail)
-        .replace(/[^a-zA-Z0-9]/g, "")
-        .slice(0, 20)}`;
-
+      // Simpan kredensial terdaftar agar bisa diverifikasi saat Login
       accounts[normalizedEmail] = {
         uid,
         email: normalizedEmail,
         passwordHash: btoa(password),
         displayName: cleanName,
       };
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          LOCAL_AUTH_ACCOUNTS_KEY,
-          JSON.stringify(accounts)
-        );
-      }
+      saveRegisteredAccountsMap(accounts);
 
       const profile = await upsertUserProfile(uid, normalizedEmail, cleanName);
-      markRegistrationCompleted(normalizedEmail);
       setUser(profile);
       if (typeof window !== "undefined") {
         window.localStorage.setItem(
@@ -573,6 +593,56 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
           JSON.stringify(profile)
         );
       }
+    },
+    []
+  );
+
+  // Fungsi khusus Owner untuk membuat akun baru lengkap dengan password dari /owner
+  const provisionUserByOwner = useCallback(
+    async (params: {
+      email: string;
+      password: string;
+      displayName: string;
+      customMaxProjects: number;
+    }): Promise<VoamUserDocument> => {
+      const normalizedEmail = params.email.trim().toLowerCase();
+      assertSafeMetadataInput(
+        normalizedEmail,
+        "Email Provisioning",
+        OWNER_DISPLAY_EMAIL
+      );
+      const cleanName =
+        assertSafeMetadataInput(
+          params.displayName || normalizedEmail.split("@")[0] || "Developer",
+          "Nama Provisioning",
+          OWNER_DISPLAY_EMAIL
+        ) || "Developer";
+
+      if (params.password.length < 6) {
+        throw new Error("Kata sandi akun baru minimal 6 karakter.");
+      }
+
+      const uid = `usr_prov_${btoa(normalizedEmail)
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .slice(0, 18)}`;
+
+      const accounts = getRegisteredAccountsMap();
+      accounts[normalizedEmail] = {
+        uid,
+        email: normalizedEmail,
+        passwordHash: btoa(params.password),
+        displayName: cleanName,
+      };
+      saveRegisteredAccountsMap(accounts);
+
+      await upsertUserProfile(uid, normalizedEmail, cleanName);
+      const updated = await updateUserByOwner(uid, {
+        displayName: cleanName,
+        status: "active",
+        customMaxProjects: params.customMaxProjects,
+      });
+
+      return updated;
     },
     []
   );
@@ -597,6 +667,7 @@ export function VoamProvider({ children }: { children: React.ReactNode }) {
         systemConfig,
         refreshSystemConfig,
         updateSystemConfig,
+        provisionUserByOwner,
         island,
         vercelToken,
         setVercelToken,
