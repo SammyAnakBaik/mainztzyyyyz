@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,16 +13,21 @@ import {
   ShieldCheck,
   Layers,
   Loader2,
+  ShieldAlert,
+  RefreshCw,
 } from "lucide-react";
 import AnimatedLogo from "@/components/animations/AnimatedLogo";
 import { useVoam } from "@/context/VoamContext";
 import { isLiveFirebaseConfigured } from "@/lib/firebase";
+import { isOwnerEmail } from "@/lib/security-shield";
 
 export default function AuthGatewayPage() {
   const router = useRouter();
   const {
     user,
+    isOwner,
     loadingAuth,
+    systemConfig,
     loginWithEmail,
     registerWithEmail,
     setIslandStatus,
@@ -32,39 +37,85 @@ export default function AuthGatewayPage() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [displayName, setDisplayName] = useState<string>("");
+  const [honeypot, setHoneypot] = useState<string>("");
+
+  // Tantangan Verifikasi Anti-Bot untuk tab Registrasi
+  const [challengeA, setChallengeA] = useState<number>(7);
+  const [challengeB, setChallengeB] = useState<number>(5);
+  const [challengeInput, setChallengeInput] = useState<string>("");
+
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
 
+  const generateNewChallenge = useCallback(() => {
+    const a = Math.floor(Math.random() * 9) + 3;
+    const b = Math.floor(Math.random() * 8) + 2;
+    setChallengeA(a);
+    setChallengeB(b);
+    setChallengeInput("");
+  }, []);
+
+  useEffect(() => {
+    generateNewChallenge();
+  }, [generateNewChallenge]);
+
   useEffect(() => {
     if (!loadingAuth && user) {
-      router.replace("/dashboard");
+      if (isOwner) {
+        router.replace("/owner");
+      } else {
+        router.replace("/dashboard");
+      }
     }
-  }, [user, loadingAuth, router]);
+  }, [user, isOwner, loadingAuth, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+
+    if (
+      authMode === "register" &&
+      systemConfig.requireHumanChallengeOnRegister
+    ) {
+      const expected = challengeA + challengeB;
+      if (parseInt(challengeInput.trim(), 10) !== expected) {
+        setErrorMsg(
+          "Verifikasi Keamanan Anti-Bot tidak sesuai. Hitung kembali penjumlahan di bawah."
+        );
+        generateNewChallenge();
+        return;
+      }
+    }
+
     setSubmitting(true);
 
     try {
       if (authMode === "login") {
-        setIslandStatus("uploading", "Memverifikasi Kredensial...", {
-          subtitle: "Menghubungi Firebase Auth & Koleksi Users",
+        setIslandStatus("uploading", "Memverifikasi Kredensial & WAF...", {
+          subtitle: "Inspeksi Anti-SQLi & Sinkronisasi Firebase Auth",
           progress: 65,
         });
         await loginWithEmail(email, password);
+        if (isOwnerEmail(email)) {
+          setIslandStatus("deployed", "Otoritas Supreme Owner Aktif", {
+            subtitle: "Membuka Owner Command Center",
+            autoResetMs: 2800,
+          });
+          router.push("/owner");
+          return;
+        }
         setIslandStatus("deployed", "Sesi Developer Aktif", {
           subtitle: "Mengalihkan ke Ruang Kerja MainZ Voam",
           autoResetMs: 2800,
         });
       } else {
-        setIslandStatus("uploading", "Mendaftarkan Akun Baru...", {
-          subtitle: "Menyimpan profil ke Firestore koleksi users",
+        setIslandStatus("uploading", "Memeriksa Kuota & Mendaftarkan Akun...", {
+          subtitle: "Proteksi Anti-Spam & Sinkronisasi koleksi users",
           progress: 70,
         });
-        await registerWithEmail(email, password, displayName);
+        await registerWithEmail(email, password, displayName, honeypot);
         setIslandStatus("deployed", "Akun Berhasil Dibuat", {
-          subtitle: "Profil tersimpan di koleksi users",
+          subtitle: "Profil tersimpan aman di koleksi users",
           autoResetMs: 2800,
         });
       }
@@ -75,9 +126,12 @@ export default function AuthGatewayPage() {
           ? err.message
           : "Gagal memproses autentikasi. Periksa kembali data Anda.";
       setErrorMsg(msg);
-      setIslandStatus("error", "Autentikasi Gagal", {
+      if (authMode === "register") {
+        generateNewChallenge();
+      }
+      setIslandStatus("error", "Proteksi Keamanan / Auth", {
         errorMessage: msg,
-        autoResetMs: 4500,
+        autoResetMs: 4800,
       });
     } finally {
       setSubmitting(false);
@@ -119,7 +173,7 @@ export default function AuthGatewayPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050507] text-zinc-100 relative overflow-hidden">
-      {/* Subtle Architectural Top Light & Micro-Grid */}
+      {/* Subtle Architectural Micro-Grid */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.025]"
         style={{
@@ -134,38 +188,52 @@ export default function AuthGatewayPage() {
         <div className="flex items-center gap-3">
           <AnimatedLogo size="sm" />
           <span className="text-[11px] font-mono text-zinc-400 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.07]">
-            v13.4
+            v13.5 WAF
           </span>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
-          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-          <span className="hidden sm:inline">
-            {isLiveFirebaseConfigured()
-              ? "Firestore Cloud • asia-southeast1"
-              : "Hybrid Cloud Engine"}
-          </span>
+        <div className="flex items-center gap-3 text-xs text-zinc-400 font-mono">
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/[0.07] border border-emerald-500/20 text-emerald-300 text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Anti-SQLi &amp; Anti-Spam Shield</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="hidden sm:inline">
+              {isLiveFirebaseConfigured()
+                ? "Firestore Cloud • asia-southeast1"
+                : "Hybrid Cloud Engine"}
+            </span>
+          </div>
         </div>
       </header>
 
+      {/* Global Announcement Banner (Jika Diaktifkan oleh Owner) */}
+      {systemConfig.globalAnnouncement && (
+        <div className="relative z-10 border-b border-white/[0.07] bg-white/[0.03] px-4 py-2 text-center text-xs text-zinc-200 font-mono">
+          <span className="text-sky-400 font-semibold mr-2">[BROADCAST OWNER]</span>
+          {systemConfig.globalAnnouncement}
+        </div>
+      )}
+
       {/* Main Content Split */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-12">
+      <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-10">
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
           {/* Kolom Kiri: Value Proposition & Architectural Specs */}
           <div className="lg:col-span-7 space-y-7">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.08] text-zinc-300 text-xs font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-              <span>Cloud Deployment &amp; In-Browser Monaco IDE</span>
+              <span>Cloud Deployment • Monaco IDE • WAF Protected</span>
             </div>
 
             <div className="space-y-3">
               <AnimatedLogo size="lg" />
               <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-xl">
                 Platform deployment terpadu dan lingkungan pengembangan berbasis
-                web. Ekstrak arsip <code className="text-zinc-200 font-mono">.zip</code> di
-                memori klien, publikasikan ke jaringan global Vercel REST API
-                v13, dan kelola kode produksi secara langsung melalui Monaco
-                Editor.
+                web. Ekstrak arsip{" "}
+                <code className="text-zinc-200 font-mono">.zip</code> di memori
+                klien, publikasikan ke jaringan global Vercel REST API v13, dan
+                kelola kode produksi secara langsung melalui Monaco Editor.
               </p>
             </div>
 
@@ -180,9 +248,10 @@ export default function AuthGatewayPage() {
                     Auto-Fallback HTML Synthesis
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                    Mendeteksi keberadaan <code className="text-zinc-200 font-mono">/index.html</code> dan
-                    merakit berkas induk pemanggil aset secara otomatis di memori
-                    sebelum pengiriman payload.
+                    Mendeteksi keberadaan{" "}
+                    <code className="text-zinc-200 font-mono">/index.html</code>{" "}
+                    dan merakit berkas induk pemanggil aset secara otomatis di
+                    memori sebelum pengiriman payload.
                   </p>
                 </div>
               </div>
@@ -197,7 +266,8 @@ export default function AuthGatewayPage() {
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                     Navigasi pohon berkas interaktif, pembuatan file baru instan,
-                    pratinjau langsung (<span className="text-zinc-200">split live preview</span>),
+                    pratinjau langsung (
+                    <span className="text-zinc-200">split live preview</span>),
                     dan deteksi bahasa otomatis.
                   </p>
                 </div>
@@ -205,16 +275,16 @@ export default function AuthGatewayPage() {
 
               <div className="py-4 flex items-start gap-4">
                 <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
-                  <ShieldCheck className="w-4 h-4 text-zinc-200" />
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div>
                   <h3 className="text-xs font-semibold text-zinc-100 tracking-wide">
-                    Cloud Firestore FileSystem Sync
+                    Multi-Layer WAF: Anti-SQLi, Anti-NoSQLi &amp; DB Quota Guard
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                    Seluruh pohon kode tersimpan aman pada koleksi{" "}
-                    <code className="text-zinc-200 font-mono">projects</code> di
-                    Firestore untuk mendukung proses Re-deploy berulang.
+                    Inspeksi mendalam terhadap pola injeksi kueri, pembatasan
+                    laju pembuatan akun (anti-spam), serta perlindungan kuota
+                    dokumen Firestore secara real-time.
                   </p>
                 </div>
               </div>
@@ -277,9 +347,39 @@ export default function AuthGatewayPage() {
                     </h2>
                     <p className="text-xs text-zinc-400 mt-1">
                       {authMode === "login"
-                        ? "Gunakan akun Anda untuk mengakses dashboard & IDE."
-                        : "Profil Anda akan disinkronkan ke koleksi users Firestore."}
+                        ? "Gunakan kredensial Developer atau Supreme Owner Anda."
+                        : "Dilindungi oleh WAF Anti-Spam & Kuota Database Firestore."}
                     </p>
+                  </div>
+
+                  {/* Peringatan jika Registrasi Publik Dikunci oleh Owner */}
+                  {authMode === "register" &&
+                    !systemConfig.registrationEnabled && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300 flex items-start gap-2.5">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <span>
+                          Pendaftaran akun publik sedang dikunci sementara oleh
+                          Owner untuk menjaga kuota database.
+                        </span>
+                      </div>
+                    )}
+
+                  {/* Hidden Honeypot Input untuk menjebak bot spam otomatis */}
+                  <div
+                    className="hidden"
+                    aria-hidden="true"
+                    style={{ display: "none" }}
+                  >
+                    <label>
+                      Jangan isi kolom ini
+                      <input
+                        type="text"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={honeypot}
+                        onChange={(e) => setHoneypot(e.target.value)}
+                      />
+                    </label>
                   </div>
 
                   {authMode === "register" && (
@@ -292,6 +392,7 @@ export default function AuthGatewayPage() {
                         <input
                           type="text"
                           required
+                          maxLength={60}
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           placeholder="MainZ Architect"
@@ -310,6 +411,7 @@ export default function AuthGatewayPage() {
                       <input
                         type="email"
                         required
+                        maxLength={100}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="nama@domain.com"
@@ -328,6 +430,7 @@ export default function AuthGatewayPage() {
                         type="password"
                         required
                         minLength={6}
+                        maxLength={100}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Minimal 6 karakter"
@@ -336,11 +439,44 @@ export default function AuthGatewayPage() {
                     </div>
                   </div>
 
+                  {/* Tantangan Keamanan Anti-Bot (Aktif saat Registrasi) */}
+                  {authMode === "register" &&
+                    systemConfig.requireHumanChallengeOnRegister && (
+                      <div className="p-3 rounded-xl bg-[#050507] border border-white/[0.08] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-mono text-zinc-300 flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            Verifikasi Anti-Bot: Berapa{" "}
+                            <strong className="text-white">
+                              {challengeA} + {challengeB}
+                            </strong>{" "}
+                            ?
+                          </span>
+                          <button
+                            type="button"
+                            onClick={generateNewChallenge}
+                            title="Acak ulang tantangan"
+                            className="text-zinc-400 hover:text-white transition-colors"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          required
+                          value={challengeInput}
+                          onChange={(e) => setChallengeInput(e.target.value)}
+                          placeholder="Ketik hasil penjumlahan..."
+                          className="voam-input py-1.5 text-xs font-mono"
+                        />
+                      </div>
+                    )}
+
                   {errorMsg && (
                     <motion.div
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300"
+                      className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300 leading-relaxed"
                     >
                       {errorMsg}
                     </motion.div>
@@ -348,7 +484,11 @@ export default function AuthGatewayPage() {
 
                   <button
                     type="submit"
-                    disabled={submitting}
+                    disabled={
+                      submitting ||
+                      (authMode === "register" &&
+                        !systemConfig.registrationEnabled)
+                    }
                     className="voam-btn-primary w-full py-2.5 mt-1"
                   >
                     {submitting ? (
@@ -360,7 +500,7 @@ export default function AuthGatewayPage() {
                       <>
                         <span>
                           {authMode === "login"
-                            ? "Masuk ke Dashboard"
+                            ? "Masuk ke Workspace"
                             : "Buat Akun & Lanjutkan"}
                         </span>
                         <ArrowRight className="w-4 h-4" />
@@ -370,7 +510,7 @@ export default function AuthGatewayPage() {
                 </motion.form>
               </AnimatePresence>
 
-              <div className="mt-5 pt-5 border-t border-white/[0.06] space-y-3">
+              <div className="mt-5 pt-5 border-t border-white/[0.06] space-y-2.5">
                 <button
                   type="button"
                   disabled={submitting}

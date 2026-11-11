@@ -20,8 +20,9 @@ import {
   FileWarning,
   ArrowUpRight,
   Database,
-  Cpu,
+  Shield,
   Globe,
+  ShieldCheck,
 } from "lucide-react";
 import AnimatedLogo from "@/components/animations/AnimatedLogo";
 import { withAuthGuard } from "@/components/auth/withAuthGuard";
@@ -42,6 +43,8 @@ function DashboardContent() {
   const router = useRouter();
   const {
     user,
+    isOwner,
+    systemConfig,
     logoutUser,
     vercelToken,
     setVercelToken,
@@ -75,6 +78,10 @@ function DashboardContent() {
     fetchProjects();
   }, [fetchProjects]);
 
+  const effectiveQuota = isOwner
+    ? 9999
+    : user?.customMaxProjects || systemConfig.maxProjectsPerUser;
+
   const executeFullDeployPipeline = useCallback(
     async (rawProjectName: string, initialFs: VirtualFileSystem) => {
       if (!user) return;
@@ -82,7 +89,7 @@ function DashboardContent() {
 
       try {
         setIslandStatus("uploading", `Mengunggah ${rawProjectName}...`, {
-          subtitle: "Mengekstrak aset & merakit payload JSON Vercel v13",
+          subtitle: "Inspeksi WAF & merakit payload JSON Vercel v13",
           progress: 28,
         });
 
@@ -111,7 +118,7 @@ function DashboardContent() {
           },
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 650));
+        await new Promise((resolve) => setTimeout(resolve, 600));
 
         const savedProject = await createProjectDocument({
           uid: user.uid,
@@ -137,7 +144,7 @@ function DashboardContent() {
           err instanceof Error
             ? err.message
             : "Terjadi kegagalan saat mendeploy ke Vercel API v13.";
-        setIslandStatus("error", "Deployment Gagal", {
+        setIslandStatus("error", "Deployment Ditolak / Gagal", {
           errorMessage: msg,
           autoResetMs: 6500,
         });
@@ -218,13 +225,31 @@ function DashboardContent() {
             <span className="text-xs font-medium text-zinc-200 truncate">
               {user?.displayName || "developer"}
             </span>
-            <span className="hidden md:inline-block text-[10px] font-mono text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08]">
-              {user?.email}
-            </span>
+            {isOwner ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-300 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
+                <Shield className="w-3 h-3 text-amber-400" />
+                OWNER
+              </span>
+            ) : (
+              <span className="hidden md:inline-block text-[10px] font-mono text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08]">
+                {user?.email}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => router.push("/owner")}
+              className="voam-btn-primary py-1.5 px-3 text-xs"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Owner Command Center</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setShowTokenModal((prev) => !prev)}
@@ -236,7 +261,7 @@ function DashboardContent() {
               }`}
             />
             <KeyRound className="w-3.5 h-3.5 text-zinc-400" />
-            <span>
+            <span className="hidden sm:inline">
               {vercelToken ? "Token Vercel Aktif" : "Token Vercel API"}
             </span>
           </button>
@@ -254,6 +279,16 @@ function DashboardContent() {
           </button>
         </div>
       </header>
+
+      {/* Global Announcement Banner (Jika Diaktifkan oleh Owner) */}
+      {systemConfig.globalAnnouncement && (
+        <div className="border-b border-white/[0.07] bg-white/[0.03] px-4 py-2 text-center text-xs text-zinc-200 font-mono">
+          <span className="text-sky-400 font-semibold mr-2">
+            [BROADCAST OWNER]
+          </span>
+          {systemConfig.globalAnnouncement}
+        </div>
+      )}
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
         {/* Drawer Konfigurasi Token Vercel */}
@@ -330,11 +365,14 @@ function DashboardContent() {
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
             <div className="px-3 py-1.5 rounded-lg bg-[#0B0B0F] border border-white/[0.07] flex items-center gap-2 text-zinc-300">
               <Globe className="w-3.5 h-3.5 text-zinc-400" />
-              <span>{projects.length} Proyek</span>
+              <span>
+                Kuota: {projects.length} / {isOwner ? "∞" : effectiveQuota}{" "}
+                Proyek
+              </span>
             </div>
             <div className="px-3 py-1.5 rounded-lg bg-[#0B0B0F] border border-white/[0.07] flex items-center gap-2 text-zinc-300">
-              <Cpu className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Vercel API v13</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>WAF Anti-SQLi</span>
             </div>
             <div className="px-3 py-1.5 rounded-lg bg-[#0B0B0F] border border-white/[0.07] flex items-center gap-2 text-zinc-300">
               <Database className="w-3.5 h-3.5 text-emerald-400" />
@@ -359,6 +397,7 @@ function DashboardContent() {
                 <div className="w-full sm:w-60">
                   <input
                     type="text"
+                    maxLength={80}
                     value={customProjectName}
                     onChange={(e) => setCustomProjectName(e.target.value)}
                     placeholder="Nama proyek (opsional)..."
@@ -432,7 +471,8 @@ function DashboardContent() {
 
                 <div className="p-5 space-y-4">
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Belum menyiapkan arsip <code className="text-zinc-200 font-mono">.zip</code>?
+                    Belum menyiapkan arsip{" "}
+                    <code className="text-zinc-200 font-mono">.zip</code>?
                     Bangkitkan proyek multi-file di bawah ini untuk langsung
                     menguji <strong className="text-zinc-200">Monaco Editor</strong>{" "}
                     dan <strong className="text-zinc-200">Re-deploy Vercel v13</strong>.
@@ -471,8 +511,11 @@ function DashboardContent() {
               </div>
 
               <div className="px-5 py-3 border-t border-white/[0.06] bg-[#07070A] flex items-center justify-between text-[11px] font-mono text-zinc-400">
-                <span>Firestore: projects/{`{id}`}</span>
-                <span className="text-emerald-400">● Ready</span>
+                <span>
+                  Maks {systemConfig.maxFilesPerProject} file •{" "}
+                  {systemConfig.maxProjectSizeKb} KB
+                </span>
+                <span className="text-emerald-400">● Protected</span>
               </div>
             </div>
           </div>
@@ -515,7 +558,8 @@ function DashboardContent() {
                   Belum Ada Proyek di Workspace
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  Jatuhkan berkas <code className="text-zinc-200 font-mono">.zip</code> pada
+                  Jatuhkan berkas{" "}
+                  <code className="text-zinc-200 font-mono">.zip</code> pada
                   kotak di atas atau klik tombol{" "}
                   <strong className="text-zinc-200">
                     Deploy Starter Web App
@@ -526,84 +570,94 @@ function DashboardContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {projects.map((proj) => (
-                <div
-                  key={proj.id}
-                  className="voam-glass-interactive rounded-2xl p-5 flex flex-col justify-between gap-4"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-semibold text-white truncate">
-                          {proj.name}
-                        </h3>
-                        <p className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">
-                          {proj.deploymentId}
-                        </p>
+              {projects.map((proj) => {
+                const isQuarantined = proj.status === "quarantined";
+                return (
+                  <div
+                    key={proj.id}
+                    className="voam-glass-interactive rounded-2xl p-5 flex flex-col justify-between gap-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-semibold text-white truncate">
+                            {proj.name}
+                          </h3>
+                          <p className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">
+                            {proj.deploymentId}
+                          </p>
+                        </div>
+                        {isQuarantined ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                            Quarantined
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Ready
+                          </span>
+                        )}
                       </div>
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        Ready
-                      </span>
-                    </div>
 
-                    <a
-                      href={proj.deploymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#060609] border border-white/[0.07] hover:border-white/[0.2] text-xs font-mono text-zinc-300 hover:text-white transition-colors"
-                    >
-                      <span className="truncate">
-                        {proj.deploymentUrl.replace(/^https?:\/\//, "")}
-                      </span>
-                      <ExternalLink className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    </a>
-
-                    <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06]">
-                        <Layers className="w-3 h-3 text-zinc-400" />
-                        {Object.keys(proj.fileSystem || {}).length ||
-                          proj.fileCount}{" "}
-                        file
-                      </span>
-
-                      {proj.hasAutoFallbackIndex && (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                          Auto index.html
+                      <a
+                        href={proj.deploymentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#060609] border border-white/[0.07] hover:border-white/[0.2] text-xs font-mono text-zinc-300 hover:text-white transition-colors"
+                      >
+                        <span className="truncate">
+                          {proj.deploymentUrl.replace(/^https?:\/\//, "")}
                         </span>
-                      )}
+                        <ExternalLink className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      </a>
 
-                      <span className="inline-flex items-center gap-1 ml-auto text-[10px] text-zinc-500">
-                        <Clock className="w-3 h-3" />
-                        {new Date(proj.updatedAt).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                      <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06]">
+                          <Layers className="w-3 h-3 text-zinc-400" />
+                          {Object.keys(proj.fileSystem || {}).length ||
+                            proj.fileCount}{" "}
+                          file
+                        </span>
+
+                        {proj.hasAutoFallbackIndex && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                            Auto index.html
+                          </span>
+                        )}
+
+                        <span className="inline-flex items-center gap-1 ml-auto text-[10px] text-zinc-500">
+                          <Clock className="w-3 h-3" />
+                          {new Date(proj.updatedAt).toLocaleTimeString("id-ID", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-3 border-t border-white/[0.06]">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/project/${proj.id}`)}
+                        className="voam-btn-primary flex-1 py-2 text-xs"
+                      >
+                        <Code2 className="w-3.5 h-3.5" />
+                        <span>Buka di Monaco IDE</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProject(proj)}
+                        title="Hapus Proyek"
+                        className="p-2 rounded-xl bg-white/[0.03] hover:bg-rose-500/15 text-zinc-400 hover:text-rose-400 border border-white/[0.07] hover:border-rose-500/30 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 pt-3 border-t border-white/[0.06]">
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/project/${proj.id}`)}
-                      className="voam-btn-primary flex-1 py-2 text-xs"
-                    >
-                      <Code2 className="w-3.5 h-3.5" />
-                      <span>Buka di Monaco IDE</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteProject(proj)}
-                      title="Hapus Proyek"
-                      className="p-2 rounded-xl bg-white/[0.03] hover:bg-rose-500/15 text-zinc-400 hover:text-rose-400 border border-white/[0.07] hover:border-rose-500/30 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

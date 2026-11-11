@@ -13,10 +13,25 @@ import {
   orderBy,
   type Firestore,
 } from "firebase/firestore";
+import {
+  DEFAULT_SYSTEM_CONFIG,
+  OWNER_DISPLAY_EMAIL,
+  OWNER_EMAIL,
+  assertSafeFilePath,
+  assertSafeMetadataInput,
+  getLocalSystemConfig,
+  isOwnerEmail,
+  recordSecurityEvent,
+  saveLocalSystemConfig,
+  verifyProjectQuotaAndSecurity,
+} from "@/lib/security-shield";
 import type {
+  UserAccountStatus,
+  UserRole,
   VirtualFileSystem,
   VoamProject,
   VoamProjectDocument,
+  VoamSystemConfig,
   VoamUserDocument,
 } from "@/types/voam";
 
@@ -38,10 +53,6 @@ const firebaseConfig = {
     "1:659919046966:web:34cc01e876f1e8fc0b0b97",
 };
 
-/**
- * Mengecek apakah kredensial Firebase yang digunakan adalah kredensial Cloud produksi
- * atau masih menggunakan placeholder lokal.
- */
 export function isLiveFirebaseConfigured(): boolean {
   const key = firebaseConfig.apiKey;
   return (
@@ -71,7 +82,9 @@ export function normalizeFilePath(rawPath: string): string {
   const cleaned = rawPath.replace(/\\/g, "/").trim();
   if (!cleaned) return "/untitled.txt";
   const withoutRelative = cleaned.replace(/^(\.\/)+/, "");
-  return withoutRelative.startsWith("/") ? withoutRelative : `/${withoutRelative}`;
+  return withoutRelative.startsWith("/")
+    ? withoutRelative
+    : `/${withoutRelative}`;
 }
 
 export function serializeFileSystem(fs: VirtualFileSystem): string {
@@ -113,13 +126,47 @@ export function parseFileSystem(
 }
 
 // ============================================================================
-// Local Persistence Mirror (Memastikan Zero-Downtime jika Mode Lokal / Offline)
+// Local Persistence Mirror
 // ============================================================================
 
 const LOCAL_USERS_KEY = "mainz_voam_users_v1";
 const LOCAL_PROJECTS_KEY = "mainz_voam_projects_v1";
 
-function getLocalProjectsMap(): Record<string, VoamProject> {
+export function getLocalUsersMap(): Record<string, VoamUserDocument> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_USERS_KEY);
+    const map: Record<string, VoamUserDocument> = raw ? JSON.parse(raw) : {};
+    // Pastikan akun Bootstrapped Owner selalu tercatat di direktori pengguna
+    const ownerUid = "usr_owner_mainzz_supreme";
+    if (!map[ownerUid]) {
+      map[ownerUid] = {
+        uid: ownerUid,
+        email: OWNER_DISPLAY_EMAIL,
+        displayName: "MainZ Supreme Owner",
+        role: "owner",
+        status: "active",
+        customMaxProjects: 500,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: new Date().toISOString(),
+      };
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+export function setLocalUsersMap(map: Record<string, VoamUserDocument>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(map));
+  } catch {
+    // Abaikan
+  }
+}
+
+export function getLocalProjectsMap(): Record<string, VoamProject> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(LOCAL_PROJECTS_KEY);
@@ -129,29 +176,23 @@ function getLocalProjectsMap(): Record<string, VoamProject> {
   }
 }
 
-function setLocalProjectsMap(map: Record<string, VoamProject>): void {
+export function setLocalProjectsMap(map: Record<string, VoamProject>): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(map));
   } catch {
-    // Abaikan jika kuota penyimpanan lokal penuh
+    // Abaikan
   }
 }
 
 function saveUserToLocalMirror(userDoc: VoamUserDocument): void {
-  if (typeof window === "undefined") return;
-  try {
-    const raw = window.localStorage.getItem(LOCAL_USERS_KEY);
-    const map: Record<string, VoamUserDocument> = raw ? JSON.parse(raw) : {};
-    map[userDoc.uid] = userDoc;
-    window.localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(map));
-  } catch {
-    // Abaikan error penyimpanan lokal
-  }
+  const map = getLocalUsersMap();
+  map[userDoc.uid] = userDoc;
+  setLocalUsersMap(map);
 }
 
 // ============================================================================
-// Operasi Koleksi `users` (Sesuai Kontrak `firestore.rules`)
+// Operasi Koleksi `users` (Dengan Proteksi WAF & RBAC Owner)
 // ============================================================================
 
 export async function upsertUserProfile(
@@ -160,18 +201,36 @@ export async function upsertUserProfile(
   displayName?: string
 ): Promise<VoamUserDocument> {
   const nowIso = new Date().toISOString();
-  const cleanName = (
+  const safeEmail = assertSafeMetadataInput(email, "Email Pengguna", email);
+  const isOwner = isOwnerEmail(safeEmail);
+
+  const rawName =
     displayName ||
-    email.split("@")[0] ||
-    "MainZ Engineer"
+    (isOwner ? "MainZ Supreme Owner" : safeEmail.split("@")[0] || "Developer");
+  const cleanName = assertSafeMetadataInput(
+    rawName,
+    "Nama Tampilan",
+    safeEmail
   ).slice(0, 80);
+
+  const existingLocal = getLocalUsersMap()[uid];
+  if (existingLocal?.status === "suspended" && !isOwner) {
+    throw new Error(
+      "Akun Anda telah dibekukan (Suspended) oleh Owner MainZ Voam. Hubungi administrator."
+    );
+  }
+
+  const assignedRole: UserRole = isOwner ? "owner" : "developer";
 
   const userPayload: VoamUserDocument = {
     uid,
-    email,
+    email: isOwner ? OWNER_DISPLAY_EMAIL : safeEmail,
     displayName: cleanName,
-    role: "developer",
-    createdAt: nowIso,
+    role: assignedRole,
+    status: existingLocal?.status || "active",
+    customMaxProjects:
+      existingLocal?.customMaxProjects || (isOwner ? 500 : undefined),
+    createdAt: existingLocal?.createdAt || nowIso,
     lastLoginAt: nowIso,
   };
 
@@ -183,11 +242,20 @@ export async function upsertUserProfile(
       const existingSnap = await getDoc(userRef);
       if (existingSnap.exists()) {
         const existingData = existingSnap.data() as VoamUserDocument;
+        if (existingData.status === "suspended" && !isOwner) {
+          throw new Error(
+            "Akun Anda telah dibekukan (Suspended) oleh Owner MainZ Voam."
+          );
+        }
         const updatedDoc: VoamUserDocument = {
           uid: existingData.uid,
           email: existingData.email,
           displayName: cleanName || existingData.displayName,
-          role: "developer",
+          role: isOwner ? "owner" : existingData.role || "developer",
+          status: existingData.status || "active",
+          ...(existingData.customMaxProjects
+            ? { customMaxProjects: existingData.customMaxProjects }
+            : {}),
           createdAt: existingData.createdAt || nowIso,
           lastLoginAt: nowIso,
         };
@@ -195,10 +263,28 @@ export async function upsertUserProfile(
         saveUserToLocalMirror(updatedDoc);
         return updatedDoc;
       } else {
-        await setDoc(userRef, userPayload);
+        const cleanFirestoreUser: Record<string, unknown> = {
+          uid: userPayload.uid,
+          email: userPayload.email,
+          displayName: userPayload.displayName,
+          role: userPayload.role,
+          status: userPayload.status || "active",
+          createdAt: userPayload.createdAt,
+          lastLoginAt: userPayload.lastLoginAt,
+        };
+        if (typeof userPayload.customMaxProjects === "number") {
+          cleanFirestoreUser.customMaxProjects = userPayload.customMaxProjects;
+        }
+        await setDoc(userRef, cleanFirestoreUser);
         return userPayload;
       }
-    } catch {
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message.includes("dibekukan (Suspended)")
+      ) {
+        throw err;
+      }
       return userPayload;
     }
   }
@@ -207,7 +293,7 @@ export async function upsertUserProfile(
 }
 
 // ============================================================================
-// Operasi Koleksi `projects` (Sesuai Kontrak `firestore.rules`)
+// Operasi Koleksi `projects` (Dengan Proteksi WAF, Kuota Per User & DB Limit)
 // ============================================================================
 
 export async function createProjectDocument(params: {
@@ -221,13 +307,37 @@ export async function createProjectDocument(params: {
   hasAutoFallbackIndex: boolean;
   fileSystem: VirtualFileSystem;
 }): Promise<VoamProject> {
+  const localUsers = getLocalUsersMap();
+  const actorDoc = localUsers[params.uid];
+  const actorRole: UserRole =
+    isOwnerEmail(params.ownerEmail) || actorDoc?.role === "owner"
+      ? "owner"
+      : "developer";
+
+  const existingUserProjects = await listUserProjects(params.uid);
+
+  // Verifikasi WAF Anti-SQLi, Path Traversal, dan Kuota Database sebelum simpan
+  verifyProjectQuotaAndSecurity({
+    actorEmail: params.ownerEmail,
+    actorRole,
+    projectName: params.name,
+    fileSystem: params.fileSystem,
+    currentUserProjectCount: existingUserProjects.length,
+    customUserMaxProjects: actorDoc?.customMaxProjects,
+    isNewProject: true,
+  });
+
   const nowIso = new Date().toISOString();
   const normalizedFs: VirtualFileSystem = {};
   Object.entries(params.fileSystem).forEach(([k, v]) => {
-    normalizedFs[normalizeFilePath(k)] = v;
+    const safePath = assertSafeFilePath(k, params.ownerEmail);
+    normalizedFs[normalizeFilePath(safePath)] = v;
   });
 
-  const fileCount = Math.max(1, Math.min(500, Object.keys(normalizedFs).length));
+  const fileCount = Math.max(
+    1,
+    Math.min(500, Object.keys(normalizedFs).length)
+  );
   const serializedFs = serializeFileSystem(normalizedFs);
 
   const firestoreDoc: VoamProjectDocument = {
@@ -255,7 +365,7 @@ export async function createProjectDocument(params: {
       projectId = newDocRef.id;
       await setDoc(newDocRef, firestoreDoc);
     } catch {
-      // Fallback ke mirror lokal jika koneksi ke Firestore terkendala
+      // Fallback ke mirror lokal
     }
   }
 
@@ -317,7 +427,7 @@ export async function listUserProjects(uid: string): Promise<VoamProject[]> {
         return remoteProjects;
       }
     } catch {
-      // Gunakan data mirror lokal apabila query memerlukan indeks atau mode offline
+      // Gunakan data mirror lokal
     }
   }
 
@@ -379,13 +489,34 @@ export async function syncProjectFileSystemAndDeploy(
     hasAutoFallbackIndex?: boolean;
   }
 ): Promise<VoamProject> {
+  const localUsers = getLocalUsersMap();
+  const actorDoc = localUsers[currentProject.uid];
+  const actorRole: UserRole =
+    isOwnerEmail(currentProject.ownerEmail) || actorDoc?.role === "owner"
+      ? "owner"
+      : "developer";
+
+  verifyProjectQuotaAndSecurity({
+    actorEmail: currentProject.ownerEmail,
+    actorRole,
+    projectName: currentProject.name,
+    fileSystem: updates.fileSystem,
+    currentUserProjectCount: 1,
+    customUserMaxProjects: actorDoc?.customMaxProjects,
+    isNewProject: false,
+  });
+
   const nowIso = new Date().toISOString();
   const normalizedFs: VirtualFileSystem = {};
   Object.entries(updates.fileSystem).forEach(([k, v]) => {
-    normalizedFs[normalizeFilePath(k)] = v;
+    const safePath = assertSafeFilePath(k, currentProject.ownerEmail);
+    normalizedFs[normalizeFilePath(safePath)] = v;
   });
 
-  const fileCount = Math.max(1, Math.min(500, Object.keys(normalizedFs).length));
+  const fileCount = Math.max(
+    1,
+    Math.min(500, Object.keys(normalizedFs).length)
+  );
   const serializedFs = serializeFileSystem(normalizedFs);
 
   const updatedFirestoreDoc: VoamProjectDocument = {
@@ -416,7 +547,7 @@ export async function syncProjectFileSystemAndDeploy(
       const docRef = doc(db, "projects", projectId);
       await setDoc(docRef, updatedFirestoreDoc);
     } catch {
-      // Tetap sinkronkan ke mirror lokal jika jaringan terputus
+      // Tetap sinkronkan ke mirror lokal
     }
   }
 
@@ -434,7 +565,7 @@ export async function syncProjectFileSystemAndDeploy(
 }
 
 export async function deleteProjectDocument(projectId: string): Promise<void> {
-  if (isLiveFirebaseConfigured()) {
+  if (isCloudSessionActive()) {
     try {
       await deleteDoc(doc(db, "projects", projectId));
     } catch {
@@ -444,4 +575,282 @@ export async function deleteProjectDocument(projectId: string): Promise<void> {
   const localMap = getLocalProjectsMap();
   delete localMap[projectId];
   setLocalProjectsMap(localMap);
+}
+
+// ============================================================================
+// FUNGSI EKSKLUSIF SUPREME OWNER (Mainzz@adminmnz.com)
+// ============================================================================
+
+export async function listAllUsersForOwner(): Promise<VoamUserDocument[]> {
+  const localMap = getLocalUsersMap();
+
+  if (isCloudSessionActive()) {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as VoamUserDocument;
+        localMap[docSnap.id] = {
+          ...data,
+          uid: docSnap.id,
+          role: isOwnerEmail(data.email) ? "owner" : data.role || "developer",
+          status: data.status || "active",
+        };
+      });
+      setLocalUsersMap(localMap);
+    } catch {
+      // Gunakan mirror lokal
+    }
+  }
+
+  return Object.values(localMap).sort(
+    (a, b) =>
+      new Date(b.lastLoginAt).getTime() - new Date(a.lastLoginAt).getTime()
+  );
+}
+
+export async function listAllProjectsForOwner(): Promise<VoamProject[]> {
+  const localMap = getLocalProjectsMap();
+
+  if (isCloudSessionActive()) {
+    try {
+      const snap = await getDocs(collection(db, "projects"));
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as VoamProjectDocument;
+        const parsedFs = parseFileSystem(data.fileSystem);
+        localMap[docSnap.id] = {
+          id: docSnap.id,
+          uid: data.uid,
+          ownerEmail: data.ownerEmail,
+          name: data.name,
+          slug: data.slug,
+          deploymentId: data.deploymentId,
+          deploymentUrl: data.deploymentUrl,
+          status: data.status,
+          fileCount:
+            typeof data.fileCount === "number"
+              ? data.fileCount
+              : Object.keys(parsedFs).length,
+          hasAutoFallbackIndex: Boolean(data.hasAutoFallbackIndex),
+          fileSystem: parsedFs,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        };
+      });
+      setLocalProjectsMap(localMap);
+    } catch {
+      // Gunakan mirror lokal
+    }
+  }
+
+  return Object.values(localMap).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+}
+
+export async function updateUserByOwner(
+  targetUid: string,
+  updates: {
+    displayName?: string;
+    status?: UserAccountStatus;
+    customMaxProjects?: number;
+  }
+): Promise<VoamUserDocument> {
+  const usersMap = getLocalUsersMap();
+  const target = usersMap[targetUid];
+  if (!target) {
+    throw new Error("Pengguna tidak ditemukan.");
+  }
+
+  if (isOwnerEmail(target.email) && updates.status === "suspended") {
+    throw new Error("Akun Supreme Owner utama tidak dapat dibekukan.");
+  }
+
+  const updatedUser: VoamUserDocument = {
+    ...target,
+    displayName: updates.displayName
+      ? assertSafeMetadataInput(
+          updates.displayName,
+          "Nama Tampilan",
+          OWNER_EMAIL
+        ).slice(0, 80)
+      : target.displayName,
+    status: updates.status || target.status || "active",
+    customMaxProjects:
+      typeof updates.customMaxProjects === "number"
+        ? Math.max(1, Math.min(500, updates.customMaxProjects))
+        : target.customMaxProjects,
+  };
+
+  usersMap[targetUid] = updatedUser;
+  setLocalUsersMap(usersMap);
+
+  if (isCloudSessionActive()) {
+    try {
+      await setDoc(doc(db, "users", targetUid), updatedUser);
+    } catch {
+      // Tetap tersimpan di mirror
+    }
+  }
+
+  recordSecurityEvent({
+    type: "USER_STATUS_CHANGED",
+    severity: "info",
+    actorEmail: OWNER_DISPLAY_EMAIL,
+    targetResource: `users/${targetUid}`,
+    details: `Owner memperbarui pengguna ${updatedUser.email} (status=${updatedUser.status}, maxProjects=${updatedUser.customMaxProjects ?? "default"}).`,
+  });
+
+  return updatedUser;
+}
+
+export async function deleteUserAndProjectsByOwner(
+  targetUid: string
+): Promise<void> {
+  const usersMap = getLocalUsersMap();
+  const target = usersMap[targetUid];
+  if (target && isOwnerEmail(target.email)) {
+    throw new Error("Akun Supreme Owner utama tidak dapat dihapus.");
+  }
+
+  delete usersMap[targetUid];
+  setLocalUsersMap(usersMap);
+
+  const projectsMap = getLocalProjectsMap();
+  Object.values(projectsMap).forEach((proj) => {
+    if (proj.uid === targetUid) {
+      delete projectsMap[proj.id];
+    }
+  });
+  setLocalProjectsMap(projectsMap);
+
+  if (isCloudSessionActive()) {
+    try {
+      await deleteDoc(doc(db, "users", targetUid));
+    } catch {
+      // Abaikan
+    }
+  }
+
+  recordSecurityEvent({
+    type: "USER_STATUS_CHANGED",
+    severity: "warning",
+    actorEmail: OWNER_DISPLAY_EMAIL,
+    targetResource: `users/${targetUid}`,
+    details: `Owner menghapus akun ${target?.email || targetUid} beserta seluruh proyek terkait.`,
+  });
+}
+
+export async function setProjectStatusByOwner(
+  projectId: string,
+  status: VoamProject["status"]
+): Promise<VoamProject | null> {
+  const projectsMap = getLocalProjectsMap();
+  const proj = projectsMap[projectId];
+  if (!proj) return null;
+
+  const updated: VoamProject = {
+    ...proj,
+    status,
+    updatedAt: new Date().toISOString(),
+  };
+  projectsMap[projectId] = updated;
+  setLocalProjectsMap(projectsMap);
+
+  if (isCloudSessionActive()) {
+    try {
+      const firestoreDoc: VoamProjectDocument = {
+        ...updated,
+        fileSystem: serializeFileSystem(updated.fileSystem),
+      };
+      await setDoc(doc(db, "projects", projectId), firestoreDoc);
+    } catch {
+      // Abaikan
+    }
+  }
+
+  return updated;
+}
+
+export async function fetchSystemConfig(): Promise<VoamSystemConfig> {
+  const localCfg = getLocalSystemConfig();
+
+  if (isCloudSessionActive()) {
+    try {
+      const snap = await getDoc(doc(db, "system_settings", "global"));
+      if (snap.exists()) {
+        const remote = snap.data() as VoamSystemConfig;
+        const merged: VoamSystemConfig = {
+          ...DEFAULT_SYSTEM_CONFIG,
+          ...remote,
+        };
+        saveLocalSystemConfig(merged);
+        return merged;
+      }
+    } catch {
+      // Gunakan konfigurasi lokal
+    }
+  }
+
+  return localCfg;
+}
+
+export async function updateSystemConfigByOwner(
+  nextConfig: VoamSystemConfig
+): Promise<VoamSystemConfig> {
+  const sanitizedAnnouncement = assertSafeMetadataInput(
+    nextConfig.globalAnnouncement || "",
+    "Pengumuman Global",
+    OWNER_DISPLAY_EMAIL
+  ).slice(0, 500);
+
+  const finalConfig: VoamSystemConfig = {
+    ...nextConfig,
+    globalAnnouncement: sanitizedAnnouncement,
+    maxRegistrationsPerWindow: Math.max(
+      1,
+      Math.min(100, Number(nextConfig.maxRegistrationsPerWindow) || 3)
+    ),
+    registrationCooldownSeconds: Math.max(
+      0,
+      Math.min(3600, Number(nextConfig.registrationCooldownSeconds) || 20)
+    ),
+    maxTotalUsersInDb: Math.max(
+      1,
+      Math.min(100000, Number(nextConfig.maxTotalUsersInDb) || 500)
+    ),
+    maxProjectsPerUser: Math.max(
+      1,
+      Math.min(500, Number(nextConfig.maxProjectsPerUser) || 10)
+    ),
+    maxFilesPerProject: Math.max(
+      1,
+      Math.min(500, Number(nextConfig.maxFilesPerProject) || 150)
+    ),
+    maxProjectSizeKb: Math.max(
+      10,
+      Math.min(900, Number(nextConfig.maxProjectSizeKb) || 850)
+    ),
+    updatedAt: new Date().toISOString(),
+    updatedBy: OWNER_DISPLAY_EMAIL,
+  };
+
+  saveLocalSystemConfig(finalConfig);
+
+  if (isCloudSessionActive()) {
+    try {
+      await setDoc(doc(db, "system_settings", "global"), finalConfig);
+    } catch {
+      // Tetap tersimpan di mirror lokal
+    }
+  }
+
+  recordSecurityEvent({
+    type: "OWNER_CONFIG_UPDATED",
+    severity: "info",
+    actorEmail: OWNER_DISPLAY_EMAIL,
+    targetResource: "system_settings/global",
+    details: `Owner memperbarui konfigurasi sistem & WAF (reg=${finalConfig.registrationEnabled}, deploy=${finalConfig.deploymentsEnabled}, maxUsers=${finalConfig.maxTotalUsersInDb}, maxProjPerUser=${finalConfig.maxProjectsPerUser}).`,
+  });
+
+  return finalConfig;
 }

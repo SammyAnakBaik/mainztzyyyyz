@@ -1,21 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  DEFAULT_SYSTEM_CONFIG,
+  inspectInputWithWaf,
+} from "@/lib/security-shield";
 import type {
   VercelDeployApiResponse,
   VercelV13DeployRequestPayload,
 } from "@/types/voam";
 
 /**
+ * In-memory Sliding Window Rate Limiter untuk endpoint `/api/deploy`
+ * Mencegah DDoS / spam deployment dari satu alamat IP.
+ */
+const ipDeployHistory = new Map<string, number[]>();
+const DEPLOY_RATE_WINDOW_MS = 5 * 60 * 1000; // 5 menit
+const MAX_DEPLOYS_PER_IP_WINDOW = 25;
+
+function checkIpDeployRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const prev = (ipDeployHistory.get(ip) || []).filter(
+    (ts) => now - ts < DEPLOY_RATE_WINDOW_MS
+  );
+  if (prev.length >= MAX_DEPLOYS_PER_IP_WINDOW) {
+    return false;
+  }
+  prev.push(now);
+  ipDeployHistory.set(ip, prev);
+  return true;
+}
+
+/**
  * Route Backend Next.js App Router — `/api/deploy`
- * Meneruskan payload standar Vercel REST API v13 ke `https://api.vercel.com/v13/deployments`
- * menggunakan Bearer Token dari header `x-vercel-token` atau environment `VERCEL_TOKEN`.
+ * Dilengkapi WAF Server-Side (Anti-SQLi, Anti-NoSQLi, Anti-Path-Traversal, & Rate Limiter)
+ * sebelum meneruskan payload ke `https://api.vercel.com/v13/deployments`.
  */
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<VercelDeployApiResponse>> {
   try {
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "local-client";
+
+    if (!checkIpDeployRateLimit(clientIp)) {
+      return NextResponse.json(
+        {
+          success: false,
+          deploymentId: "",
+          deploymentUrl: "",
+          readyState: "ERROR",
+          projectName: "rate-limited",
+          error:
+            "Rate Limit Aktif: Terlalu banyak permintaan deployment dalam 5 menit terakhir. Silakan tunggu sejenak.",
+        },
+        { status: 429 }
+      );
+    }
+
     const body = (await request.json()) as VercelV13DeployRequestPayload;
 
-    if (!body || !body.name || !Array.isArray(body.files) || body.files.length === 0) {
+    if (
+      !body ||
+      !body.name ||
+      !Array.isArray(body.files) ||
+      body.files.length === 0
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -23,9 +73,83 @@ export async function POST(
           deploymentUrl: "",
           readyState: "ERROR",
           projectName: body?.name || "unknown",
-          error: "Payload Vercel v13 tidak valid: properti name dan files wajib diisi.",
+          error:
+            "Payload Vercel v13 tidak valid: properti name dan files wajib diisi.",
         },
         { status: 400 }
+      );
+    }
+
+    // 1. Server-Side WAF Check pada Nama Proyek
+    const nameWaf = inspectInputWithWaf(
+      body.name,
+      "Nama Proyek API Deploy",
+      DEFAULT_SYSTEM_CONFIG
+    );
+    if (!nameWaf.safe) {
+      return NextResponse.json(
+        {
+          success: false,
+          deploymentId: "",
+          deploymentUrl: "",
+          readyState: "ERROR",
+          projectName: "blocked-by-waf",
+          error: nameWaf.reason || "Nama proyek diblokir oleh WAF Server.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // 2. Proteksi Kuota Jumlah File & Ukuran Payload
+    if (body.files.length > 80) {
+      return NextResponse.json(
+        {
+          success: false,
+          deploymentId: "",
+          deploymentUrl: "",
+          readyState: "ERROR",
+          projectName: body.name,
+          error: `Jumlah file (${body.files.length}) melebihi batas keamanan maksimum server (80 file per proyek).`,
+        },
+        { status: 413 }
+      );
+    }
+
+    let totalBytes = 0;
+    for (const fileEntry of body.files) {
+      if (
+        !fileEntry.file ||
+        fileEntry.file.includes("..") ||
+        fileEntry.file.includes("\0") ||
+        fileEntry.file.includes("\\")
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            deploymentId: "",
+            deploymentUrl: "",
+            readyState: "ERROR",
+            projectName: body.name,
+            error: `WAF Path Traversal Shield: Path berkas tidak aman terdeteksi (${fileEntry.file}).`,
+          },
+          { status: 403 }
+        );
+      }
+      totalBytes += (fileEntry.data || "").length;
+    }
+
+    if (totalBytes > 900 * 1024) {
+      return NextResponse.json(
+        {
+          success: false,
+          deploymentId: "",
+          deploymentUrl: "",
+          readyState: "ERROR",
+          projectName: body.name,
+          error:
+            "Ukuran total bundel melebihi batas kuota keamanan database (maksimum 900 KB).",
+        },
+        { status: 413 }
       );
     }
 
@@ -92,7 +216,7 @@ export async function POST(
       if (!vercelResponse.ok) {
         const errMessage =
           vercelData?.error?.message ||
-          `Vercel API menolak permintaan (HTTP ${vercelResponse.status}). Periksa kembali VERCEL_TOKEN Anda.`;
+          `Vercel API menolak permintaan (HTTP ${vercelResponse.status}). Periksa kembali VOAM_VERCEL_TOKEN Anda.`;
         return NextResponse.json(
           {
             success: false,
@@ -121,9 +245,9 @@ export async function POST(
       });
     }
 
-    // Jika VERCEL_TOKEN belum disetel di .env.local maupun di Vault UI,
+    // Jika VOAM_VERCEL_TOKEN belum disetel di .env.local maupun di Vault UI,
     // jalankan Edge Deployment Simulator berkecepatan tinggi agar pipeline & Firestore tetap berjalan utuh
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    await new Promise((resolve) => setTimeout(resolve, 550));
     const hashSuffix = Math.random().toString(36).substring(2, 8);
     const simulatedId = `dpl_voam_${Date.now().toString(36)}_${hashSuffix}`;
     const simulatedUrl = `https://${body.name}-${hashSuffix}.vercel.app`;

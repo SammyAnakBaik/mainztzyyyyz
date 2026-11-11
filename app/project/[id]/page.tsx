@@ -10,6 +10,7 @@ import {
   Loader2,
   FolderCode,
   AlertCircle,
+  Shield,
 } from "lucide-react";
 import AnimatedLogo from "@/components/animations/AnimatedLogo";
 import { withAuthGuard } from "@/components/auth/withAuthGuard";
@@ -29,7 +30,7 @@ function ProjectIdePageContent() {
   const router = useRouter();
   const projectId = params?.id || "";
 
-  const { vercelToken, setIslandStatus } = useVoam();
+  const { isOwner, vercelToken, setIslandStatus } = useVoam();
 
   const [project, setProject] = useState<VoamProject | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -146,6 +147,14 @@ function ProjectIdePageContent() {
 
   const handleDeployChanges = async () => {
     if (!project || isRedeploying) return;
+    if (project.status === "quarantined" && !isOwner) {
+      setIslandStatus("error", "Proyek Dalam Karantina", {
+        errorMessage:
+          "Proyek ini sedang dikarantina oleh Owner MainZ Voam dan tidak dapat di-redeploy.",
+        autoResetMs: 5000,
+      });
+      return;
+    }
     setIsRedeploying(true);
 
     try {
@@ -257,7 +266,7 @@ function ProjectIdePageContent() {
     <div className="h-screen flex flex-col bg-[#050507] overflow-hidden">
       {/* Top Command Bar IDE Bergaya Cursor / Zed */}
       <header className="h-14 px-4 sm:px-6 bg-[#08080C] border-b border-white/[0.07] flex items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
             onClick={() => router.push("/dashboard")}
@@ -266,6 +275,17 @@ function ProjectIdePageContent() {
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Dashboard</span>
           </button>
+
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => router.push("/owner")}
+              className="voam-btn-secondary py-1.5 px-2.5 border-amber-500/30 text-amber-300"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Owner Center</span>
+            </button>
+          )}
 
           <div className="hidden lg:block">
             <AnimatedLogo size="sm" />

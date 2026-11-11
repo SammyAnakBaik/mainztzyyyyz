@@ -22,21 +22,29 @@ export interface IslandNotification {
 
 /**
  * Representasi Virtual File System di memori dan Firestore.
- * Key adalah path ternormalisasi (contoh: "/index.html", "/css/style.css", "/js/app.js")
- * Value adalah isi teks mentah (raw UTF-8 source code) dari file tersebut.
  */
 export type VirtualFileSystem = Record<string, string>;
+
+export type UserRole = "developer" | "owner";
+export type UserAccountStatus = "active" | "suspended";
 
 export interface VoamUserDocument {
   uid: string;
   email: string;
   displayName: string;
-  role: "developer";
+  role: UserRole;
+  status?: UserAccountStatus;
+  customMaxProjects?: number;
   createdAt: string;
   lastLoginAt: string;
 }
 
-export type ProjectDeployStatus = "deployed" | "building" | "error" | "redeploying";
+export type ProjectDeployStatus =
+  | "deployed"
+  | "building"
+  | "error"
+  | "redeploying"
+  | "quarantined";
 
 export interface VoamProjectDocument {
   uid: string;
@@ -48,10 +56,6 @@ export interface VoamProjectDocument {
   status: ProjectDeployStatus;
   fileCount: number;
   hasAutoFallbackIndex: boolean;
-  /**
-   * Disimpan sebagai JSON stringified atau objek Map di Firestore.
-   * Saat ditarik ke aplikasi, dinormalisasi menjadi VirtualFileSystem.
-   */
   fileSystem: string | VirtualFileSystem;
   createdAt: string;
   updatedAt: string;
@@ -71,6 +75,54 @@ export interface VoamProject {
   fileSystem: VirtualFileSystem;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Konfigurasi Global Sistem, WAF Anti-SQLi, Anti-Spam & Limitasi Kuota DB
+ * Dikelola penuh oleh Akun Owner (Mainzz@adminmnz.com)
+ */
+export interface VoamSystemConfig {
+  registrationEnabled: boolean;
+  deploymentsEnabled: boolean;
+  maintenanceMode: boolean;
+  sqlInjectionShield: boolean;
+  noSqlInjectionShield: boolean;
+  xssSanitizerShield: boolean;
+  requireHumanChallengeOnRegister: boolean;
+  maxRegistrationsPerWindow: number;
+  registrationCooldownSeconds: number;
+  maxTotalUsersInDb: number;
+  maxProjectsPerUser: number;
+  maxFilesPerProject: number;
+  maxProjectSizeKb: number;
+  blockedEmailDomains: string[];
+  globalAnnouncement: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export type SecurityEventSeverity = "critical" | "warning" | "info";
+
+export type SecurityEventType =
+  | "SQL_INJECTION_BLOCKED"
+  | "NOSQL_INJECTION_BLOCKED"
+  | "XSS_PAYLOAD_BLOCKED"
+  | "PATH_TRAVERSAL_BLOCKED"
+  | "SPAM_REGISTRATION_BLOCKED"
+  | "RATE_LIMIT_TRIGGERED"
+  | "DB_QUOTA_ENFORCED"
+  | "OWNER_CONFIG_UPDATED"
+  | "USER_STATUS_CHANGED";
+
+export interface VoamSecurityLog {
+  id: string;
+  timestamp: string;
+  type: SecurityEventType;
+  severity: SecurityEventSeverity;
+  actorEmail: string;
+  targetResource: string;
+  details: string;
+  blockedPayload?: string;
 }
 
 /**

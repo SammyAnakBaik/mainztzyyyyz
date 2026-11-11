@@ -4,33 +4,54 @@ rules_version = '2';
 // Assumed Data Model — MainZ Voam SaaS Deployment & In-Browser IDE
 // ===============================================================
 //
-// This security rules file assumes the following data structures:
-//
 // Collection: users
 // Document ID: {userId} (matches Firebase Auth UID)
 // Fields:
-//   - uid: string (required, immutable, 1..128 chars) - Firebase Auth UID pemilik akun
-//   - email: string (required, immutable, 3..254 chars, format email) - Alamat email pengguna
-//   - displayName: string (required, 1..80 chars) - Nama tampilan developer
-//   - role: string (required, immutable, enum ['developer']) - Peran akses pengguna
-//   - createdAt: string (required, immutable, 10..40 chars, format ISO 8601) - Waktu pembuatan akun
-//   - lastLoginAt: string (required, 10..40 chars, format ISO 8601) - Waktu login terakhir
+//   - uid: string (required, immutable, 1..128 chars)
+//   - email: string (required, immutable, 3..254 chars, format email)
+//   - displayName: string (required, 1..80 chars, anti-injection validated)
+//   - role: string (required, enum ['developer', 'owner'])
+//   - status: string (optional, enum ['active', 'suspended'])
+//   - customMaxProjects: int (optional, 1..500)
+//   - createdAt: string (required, immutable, 10..40 chars, format ISO 8601)
+//   - lastLoginAt: string (required, 10..40 chars, format ISO 8601)
 //
 // Collection: projects
-// Document ID: {projectId} (auto-generated ID / project ID)
+// Document ID: {projectId}
 // Fields:
-//   - uid: string (required, immutable, 1..128 chars) - UID pemilik proyek (request.auth.uid)
-//   - ownerEmail: string (required, immutable, 3..254 chars, format email) - Email pemilik proyek
-//   - name: string (required, 1..100 chars) - Nama proyek
-//   - slug: string (required, 1..120 chars) - Slug proyek untuk deployment Vercel
-//   - deploymentId: string (required, 1..160 chars) - ID deployment dari Vercel API v13
-//   - deploymentUrl: string (required, 8..500 chars, valid http/https URL) - URL produksi hasil deploy
-//   - status: string (required, enum ['deployed', 'building', 'error', 'redeploying']) - Status deployment
-//   - fileCount: int (required, 1..500) - Jumlah file dalam virtual file system proyek
-//   - hasAutoFallbackIndex: bool (required) - Indikator apakah index.html dibuat otomatis oleh fallback engine
-//   - fileSystem: string | map (required, string 2..900000 chars JSON atau map 1..500 entri) - Struktur path & isi kode mentah
-//   - createdAt: string (required, immutable, 10..40 chars, format ISO 8601) - Waktu proyek dibuat pertama kali
-//   - updatedAt: string (required, 10..40 chars, format ISO 8601) - Waktu sinkronisasi/re-deploy terakhir
+//   - uid: string (required, immutable, 1..128 chars)
+//   - ownerEmail: string (required, immutable, 3..254 chars, format email)
+//   - name: string (required, 1..100 chars, anti-injection validated)
+//   - slug: string (required, 1..120 chars)
+//   - deploymentId: string (required, 1..160 chars)
+//   - deploymentUrl: string (required, 8..500 chars, valid http/https URL)
+//   - status: string (required, enum ['deployed', 'building', 'error', 'redeploying', 'quarantined'])
+//   - fileCount: int (required, 1..500)
+//   - hasAutoFallbackIndex: bool (required)
+//   - fileSystem: string | map (required, string 2..900000 chars JSON atau map 1..500 entri)
+//   - createdAt: string (required, immutable, 10..40 chars, format ISO 8601)
+//   - updatedAt: string (required, 10..40 chars, format ISO 8601)
+//
+// Collection: system_settings
+// Document ID: {configId} (e.g. 'global')
+// Fields:
+//   - registrationEnabled: bool
+//   - deploymentsEnabled: bool
+//   - maintenanceMode: bool
+//   - sqlInjectionShield: bool
+//   - noSqlInjectionShield: bool
+//   - xssSanitizerShield: bool
+//   - requireHumanChallengeOnRegister: bool
+//   - maxRegistrationsPerWindow: int (1..100)
+//   - registrationCooldownSeconds: int (0..3600)
+//   - maxTotalUsersInDb: int (1..100000)
+//   - maxProjectsPerUser: int (1..500)
+//   - maxFilesPerProject: int (1..500)
+//   - maxProjectSizeKb: int (10..900)
+//   - blockedEmailDomains: list (max 200 strings)
+//   - globalAnnouncement: string (0..500 chars)
+//   - updatedAt: string (10..40 chars)
+//   - updatedBy: string (3..254 chars)
 //
 // ===============================================================
 
@@ -41,56 +62,61 @@ service cloud.firestore {
     // Helper Functions
     // ===============================================================
 
-    // Memeriksa apakah pengguna sudah login (terautentikasi)
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Memeriksa kepemilikan dokumen berdasarkan parameter path userId
+    // Bootstrapped Supreme Owner Authority (Mainzz@adminmnz.com)
+    function isBootstrappedOwner() {
+      return isAuthenticated() &&
+        ('email' in request.auth.token) &&
+        (request.auth.token.email == 'mainzz@adminmnz.com' ||
+         request.auth.token.email == 'Mainzz@adminmnz.com');
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Memeriksa kepemilikan dokumen berdasarkan field uid pada dokumen yang sudah ada
     function isDocOwner() {
       return isAuthenticated() && request.auth.uid == resource.data.uid;
     }
 
-    // Memastikan field uid pada saat create sesuai dengan UID pengguna yang sedang login
     function uidUnchanged() {
       return ('uid' in request.resource.data) &&
         request.resource.data.uid == request.auth.uid;
     }
 
-    // Memastikan field uid tidak diubah saat operasi update
     function uidNotModified() {
       return ('uid' in request.resource.data) &&
         request.resource.data.uid == resource.data.uid;
     }
 
-    // Memastikan seluruh field wajib tersedia pada payload
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
 
-    // Memastikan dokumen hanya memiliki field yang diizinkan (mencegah Schema Pollution)
     function hasOnlyAllowedFields(fields) {
       return request.resource.data.keys().hasOnly(fields);
     }
 
-    // Memastikan field yang bersifat immutable tidak berubah saat update
     function areImmutableFieldsUnchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
     }
 
-    // Validasi panjang string untuk mencegah Resource Exhaustion / DoS
+    // Filter Anti-SQLi / Anti-NoSQLi / Anti-XSS pada metadata string
+    function isSafeMetadataString(val) {
+      return val is string &&
+        !val.matches(".*(?i)(union\\s+select|drop\\s+table|or\\s+1=1|<\\s*script|\\$where|__proto__|xp_cmdshell).*");
+    }
+
     function validStringLength(field, minLen, maxLen) {
       return request.resource.data[field] is string &&
         request.resource.data[field].size() >= minLen &&
-        request.resource.data[field].size() <= maxLen;
+        request.resource.data[field].size() <= maxLen &&
+        isSafeMetadataString(request.resource.data[field]);
     }
 
-    // Validasi format URL (wajib diawali https:// atau http://)
     function isValidUrl(url) {
       return url is string &&
         url.size() >= 8 &&
@@ -98,15 +124,14 @@ service cloud.firestore {
         (url.matches("^https://.*") || url.matches("^http://.*"));
     }
 
-    // Validasi format alamat email
     function isValidEmail(email) {
       return email is string &&
         email.size() >= 3 &&
         email.size() <= 254 &&
-        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+        isSafeMetadataString(email);
     }
 
-    // Validasi format tanggal ISO 8601 (YYYY-MM-DDTHH:MM:SS)
     function isValidDateString(dateStr) {
       return dateStr is string &&
         dateStr.size() >= 10 &&
@@ -114,7 +139,6 @@ service cloud.firestore {
         dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
     }
 
-    // Validasi struktur fileSystem (mendukung JSON stringified maupun objek Map dengan batas ukuran ketat)
     function isValidFileSystem(fs) {
       return (fs is string && fs.size() >= 2 && fs.size() <= 900000) ||
              (fs is map && fs.size() >= 1 && fs.size() <= 500);
@@ -125,14 +149,19 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      let allowedFields = ['uid', 'email', 'displayName', 'role', 'createdAt', 'lastLoginAt'];
-      return hasRequiredFields(allowedFields) &&
+      let requiredFields = ['uid', 'email', 'displayName', 'role', 'createdAt', 'lastLoginAt'];
+      let allowedFields = ['uid', 'email', 'displayName', 'role', 'status', 'customMaxProjects', 'createdAt', 'lastLoginAt'];
+      let validStatus = !('status' in data) || (data.status in ['active', 'suspended']);
+      let validCustomQuota = !('customMaxProjects' in data) || (data.customMaxProjects is int && data.customMaxProjects >= 1 && data.customMaxProjects <= 500);
+
+      return hasRequiredFields(requiredFields) &&
              hasOnlyAllowedFields(allowedFields) &&
              data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
-             data.uid == request.auth.uid &&
              isValidEmail(data.email) &&
              validStringLength('displayName', 1, 80) &&
-             data.role == 'developer' &&
+             data.role in ['developer', 'owner'] &&
+             validStatus &&
+             validCustomQuota &&
              isValidDateString(data.createdAt) &&
              isValidDateString(data.lastLoginAt);
     }
@@ -152,11 +181,10 @@ service cloud.firestore {
         'createdAt',
         'updatedAt'
       ];
-      let validStatuses = ['deployed', 'building', 'error', 'redeploying'];
+      let validStatuses = ['deployed', 'building', 'error', 'redeploying', 'quarantined'];
       return hasRequiredFields(allowedFields) &&
              hasOnlyAllowedFields(allowedFields) &&
              data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
-             data.uid == request.auth.uid &&
              isValidEmail(data.ownerEmail) &&
              validStringLength('name', 1, 100) &&
              validStringLength('slug', 1, 120) &&
@@ -170,34 +198,83 @@ service cloud.firestore {
              isValidDateString(data.updatedAt);
     }
 
+    function isValidSystemConfig(data) {
+      let allowedFields = [
+        'registrationEnabled',
+        'deploymentsEnabled',
+        'maintenanceMode',
+        'sqlInjectionShield',
+        'noSqlInjectionShield',
+        'xssSanitizerShield',
+        'requireHumanChallengeOnRegister',
+        'maxRegistrationsPerWindow',
+        'registrationCooldownSeconds',
+        'maxTotalUsersInDb',
+        'maxProjectsPerUser',
+        'maxFilesPerProject',
+        'maxProjectSizeKb',
+        'blockedEmailDomains',
+        'globalAnnouncement',
+        'updatedAt',
+        'updatedBy'
+      ];
+      return hasRequiredFields(allowedFields) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             data.registrationEnabled is bool &&
+             data.deploymentsEnabled is bool &&
+             data.maintenanceMode is bool &&
+             data.sqlInjectionShield is bool &&
+             data.noSqlInjectionShield is bool &&
+             data.xssSanitizerShield is bool &&
+             data.requireHumanChallengeOnRegister is bool &&
+             data.maxRegistrationsPerWindow is int && data.maxRegistrationsPerWindow >= 1 && data.maxRegistrationsPerWindow <= 100 &&
+             data.registrationCooldownSeconds is int && data.registrationCooldownSeconds >= 0 && data.registrationCooldownSeconds <= 3600 &&
+             data.maxTotalUsersInDb is int && data.maxTotalUsersInDb >= 1 && data.maxTotalUsersInDb <= 100000 &&
+             data.maxProjectsPerUser is int && data.maxProjectsPerUser >= 1 && data.maxProjectsPerUser <= 500 &&
+             data.maxFilesPerProject is int && data.maxFilesPerProject >= 1 && data.maxFilesPerProject <= 500 &&
+             data.maxProjectSizeKb is int && data.maxProjectSizeKb >= 10 && data.maxProjectSizeKb <= 900 &&
+             data.blockedEmailDomains is list && data.blockedEmailDomains.size() <= 200 &&
+             data.globalAnnouncement is string && data.globalAnnouncement.size() <= 500 &&
+             isValidDateString(data.updatedAt) &&
+             isValidEmail(data.updatedBy);
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
 
-    // Koleksi Users (Mengandung PII email -> hanya pemilik yang diizinkan baca/tulis)
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId) &&
-                       uidUnchanged() &&
-                       isValidUser(request.resource.data);
-      allow update: if isOwner(userId) &&
-                       uidNotModified() &&
-                       isValidUser(request.resource.data) &&
-                       areImmutableFieldsUnchanged(['uid', 'email', 'role', 'createdAt']);
-      allow delete: if false;
+      allow read: if isOwner(userId) || isBootstrappedOwner();
+      allow create: if isValidUser(request.resource.data) &&
+                       (
+                         (isOwner(userId) && uidUnchanged() && request.resource.data.role == 'developer') ||
+                         isBootstrappedOwner()
+                       );
+      allow update: if isValidUser(request.resource.data) &&
+                       (
+                         (isOwner(userId) && uidNotModified() && areImmutableFieldsUnchanged(['uid', 'email', 'role', 'status', 'customMaxProjects', 'createdAt'])) ||
+                         isBootstrappedOwner()
+                       );
+      allow delete: if isBootstrappedOwner();
     }
 
-    // Koleksi Projects (Menyimpan metadata deployment Vercel v13 & virtual fileSystem)
     match /projects/{projectId} {
-      allow read: if isDocOwner();
+      allow read: if isDocOwner() || isBootstrappedOwner();
       allow create: if isAuthenticated() &&
-                       uidUnchanged() &&
-                       isValidProject(request.resource.data);
-      allow update: if isDocOwner() &&
-                       uidNotModified() &&
                        isValidProject(request.resource.data) &&
-                       areImmutableFieldsUnchanged(['uid', 'ownerEmail', 'createdAt']);
-      allow delete: if isDocOwner();
+                       (uidUnchanged() || isBootstrappedOwner());
+      allow update: if isValidProject(request.resource.data) &&
+                       (
+                         (isDocOwner() && uidNotModified() && areImmutableFieldsUnchanged(['uid', 'ownerEmail', 'createdAt'])) ||
+                         isBootstrappedOwner()
+                       );
+      allow delete: if isDocOwner() || isBootstrappedOwner();
+    }
+
+    match /system_settings/{configId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isBootstrappedOwner() && isValidSystemConfig(request.resource.data);
+      allow delete: if false;
     }
 
     // Default Deny untuk seluruh path lainnya
